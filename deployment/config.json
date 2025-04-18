@@ -1,0 +1,7 @@
+{
+  "applicationTag": "",
+  "certificateArn": "",
+  "devHttpDomain": "",
+  "devWebSocketDomain": "",
+  "jwtSecret": ""
+}
