@@ -21,13 +21,12 @@ pub struct AuthResponse {
     pub refresh_token: String,
 }
 
-async fn guest_login_handler(_event: Request, client: &dynamodb::Client) -> Result<Response<Body>, Error> {
+async fn guest_login_handler(_event: Request, client: &DynamoDBClient) -> Result<Response<Body>, Error> {
     let uuid = Uuid::new_v4().to_string();
     let access_token = generate_jwt(&uuid).await?;
     let refresh_token = generate_refresh_token();
 
-    let table_name = env::var("TABLE_NAME").expect("table name not provided");
-    let _ = client.put_entry::<RefreshToken>(&table_name, &refresh_token, uuid).await?;
+    let _ = client.put_entry::<RefreshToken>(&refresh_token, &uuid).await?;
 
     Ok(json!(AuthResponse {
         access_token,
@@ -36,7 +35,7 @@ async fn guest_login_handler(_event: Request, client: &dynamodb::Client) -> Resu
     }).into_response().await)
 }
 
-async fn refresh_token_handler(event: Request, client: &dynamodb::Client) -> Result<Response<Body>, Error> {
+async fn refresh_token_handler(event: Request, client: &DynamoDBClient) -> Result<Response<Body>, Error> {
     let auth_header = event.headers().get("Authorization").and_then(|h| h.to_str().ok());
     let token = match auth_header {
         Some(header) if header.starts_with("Bearer ") => Some(header.trim_start_matches("Bearer ").trim()),
@@ -44,12 +43,11 @@ async fn refresh_token_handler(event: Request, client: &dynamodb::Client) -> Res
     };
 
     if let Some(token_str) = token {
-        let table_name = env::var("TABLE_NAME").expect("table name not provided");
-        let resp = client.delete_entry::<RefreshToken>(&table_name, token_str, None).await;
+        let resp = client.delete_entry::<RefreshToken>(&token_str.to_string(), None).await;
         if let Ok(uuid) = resp {
             let access_token = generate_jwt(&uuid).await?;
             let new_refresh_token = generate_refresh_token();
-            let _ = client.put_entry::<RefreshToken>(&table_name, &new_refresh_token, uuid).await?;
+            let _ = client.put_entry::<RefreshToken>(&new_refresh_token, &uuid).await?;
 
             Ok(json!(AuthResponse {
                 access_token,
@@ -89,6 +87,11 @@ pub fn generate_refresh_token() -> String {
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     tracing::init_default_subscriber();
+    let table_name = env::var("TABLE_NAME").expect("table name not provided");
+    let client = DynamoDBClient::new(
+        dynamodb::Client::new(&aws_config::load_from_env().await),
+        table_name
+    );
 
     run(service_fn(async |event: Request| {
         let route_key = if let RequestContext::ApiGatewayV2(context) = event.request_context() {
@@ -99,8 +102,6 @@ async fn main() -> Result<(), Error> {
         } else {
             return Err(anyhow!("function only handles http requests").into());
         };
-
-        let client = dynamodb::Client::new(&aws_config::load_from_env().await);
 
         match route_key.as_str() {
             "/guest" => guest_login_handler(event, &client).await,

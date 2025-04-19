@@ -4,7 +4,8 @@ A mobile app that allows players to interact with a shared deck of cards.
 
 ## Roadmap
 Currently, this app is in development. Planned features are below:
-- [ ] Base game (deck of cards that can be interacted with, with player hands)
+- [ ] MVP (deck of cards that can be interacted with, with player hands)
+- [ ] (backend): Move game store to in memory database (upstash)
 - [ ] Unit / integration testing
 - [ ] Enforced player turns
 - [ ] Multiple shared deck support (e.g multiple stacks)

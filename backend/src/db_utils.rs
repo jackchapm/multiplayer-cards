@@ -1,22 +1,15 @@
+use std::fmt::Display;
 use anyhow::{anyhow, Error};
 use aws_sdk_dynamodb::operation::put_item::PutItemOutput;
 use aws_sdk_dynamodb::types::{AttributeValue, ReturnValue};
 use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{Serialize};
 
-pub trait Key {
-    type Value: Serialize + DeserializeOwned;
-    fn prefix() -> &'static str;
-
-    fn key(key: &str) -> String {
-        format!("{}:{key}", Self::prefix())
-    }
-}
-
-macro_rules! db_entry {
-    ($struct_name:ident, $value_type:ty, $prefix:literal) => {
+#[macro_export] macro_rules! db_entry {
+    ($struct_name:ident, $key_type:ty, $value_type:ty, $prefix:literal) => {
         pub struct $struct_name;
         impl Key for $struct_name {
+            type Key = $key_type;
             type Value = $value_type;
             fn prefix() -> &'static str {
                 $prefix
@@ -25,37 +18,37 @@ macro_rules! db_entry {
     };
 }
 
-db_entry!(RefreshToken, String, "refresh_token");
-db_entry!(Connection, String, "connection");
+pub trait Key {
+    type Key: Display;
+    type Value: Serialize + DeserializeOwned;
+    fn prefix() -> &'static str;
 
-#[allow(async_fn_in_trait)]
-pub trait DynamoDBClient {
-    async fn put_entry<T: Key>(
-        &self,
-        table_name: &str,
-        key: &str,
-        value: T::Value,
-    ) -> Result<PutItemOutput, Error>;
-    async fn get_entry<T: Key>(&self, table_name: &str, key: &str) -> Option<T::Value>;
-    async fn delete_entry<T: Key>(
-        &self,
-        table_name: &str,
-        key: &str,
-        value: Option<T::Value>,
-    ) -> Result<T::Value, Error>;
+    fn key(key: &Self::Key) -> String {
+        format!("{}:{key}", Self::prefix())
+    }
 }
 
-impl DynamoDBClient for &aws_sdk_dynamodb::Client {
-    async fn put_entry<T: Key>(
+db_entry!(RefreshToken, String, String, "refresh_token");
+db_entry!(Connection, String, String, "connection");
+
+pub struct DynamoDBClient {
+    client: aws_sdk_dynamodb::Client,
+    table_name: String,
+}
+
+impl DynamoDBClient {
+    pub fn new(client: aws_sdk_dynamodb::Client, table_name: String) -> Self {
+        Self { client, table_name }
+    }
+    pub async fn put_entry<T: Key>(
         &self,
-        table_name: &str,
-        key: &str,
-        value: T::Value,
+        key: &T::Key,
+        value: &T::Value,
     ) -> Result<PutItemOutput, Error> {
         let key_av = AttributeValue::S(T::key(key));
         let value = AttributeValue::S(serde_json::to_string(&value)?);
-        self.put_item()
-            .table_name(table_name)
+        self.client.put_item()
+            .table_name(&self.table_name)
             .item("pk", key_av)
             .item("content", value)
             .send()
@@ -63,11 +56,11 @@ impl DynamoDBClient for &aws_sdk_dynamodb::Client {
             .map_err(|err| err.into())
     }
 
-    async fn get_entry<T: Key>(&self, table_name: &str, key: &str) -> Option<T::Value> {
+    pub async fn get_entry<T: Key>(&self, key: &T::Key) -> Option<T::Value> {
         let key_av = AttributeValue::S(T::key(key));
-        let response = self
+        let response = self.client
             .get_item()
-            .table_name(table_name)
+            .table_name(&self.table_name)
             .key("pk", key_av)
             .send()
             .await
@@ -76,16 +69,15 @@ impl DynamoDBClient for &aws_sdk_dynamodb::Client {
         serde_json::from_str::<T::Value>(value).ok()
     }
 
-    async fn delete_entry<T: Key>(
+    pub async fn delete_entry<T: Key>(
         &self,
-        table_name: &str,
-        key: &str,
-        value: Option<T::Value>,
+        key: &T::Key,
+        value: Option<&T::Value>,
     ) -> Result<T::Value, Error> {
         let key_av = AttributeValue::S(T::key(key));
-        let partial = self
+        let partial = self.client
             .delete_item()
-            .table_name(table_name)
+            .table_name(&self.table_name)
             .key("pk", key_av)
             .return_values(ReturnValue::AllOld);
 

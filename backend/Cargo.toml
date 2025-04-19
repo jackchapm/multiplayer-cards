@@ -6,17 +6,18 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0"
 aws-config = { version = "1", features = ["behavior-version-latest"] }
+aws_lambda_events = { version = "0.16.0", optional = true }
 aws-sdk-apigatewaymanagement = "1"
 aws-sdk-dynamodb = { version = "1" }
 jsonwebtoken = "9"
 lambda_http = { version = "0.14.0", features = ["anyhow"] }
 lambda_runtime = { version = "0.13.0", optional = true }
-aws_lambda_events = { version = "0.16.0", optional = true }
+rand = "0.9"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+strum = { version = "0.27", features = ["derive"] }
 tokio = { version = "1", features = ["macros"] }
 uuid = { version = "1", features = ["v4"] }
-casey = "0.4.2"
 
 [features]
 build-authorizer = ["lambda_runtime", "aws_lambda_events"]
