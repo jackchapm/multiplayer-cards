@@ -45,7 +45,7 @@ async fn refresh_token_handler(event: Request, client: &dynamodb::Client) -> Res
 
     if let Some(token_str) = token {
         let table_name = env::var("TABLE_NAME").expect("table name not provided");
-        let resp = client.delete_entry::<RefreshToken>(&table_name, token_str).await;
+        let resp = client.delete_entry::<RefreshToken>(&table_name, token_str, None).await;
         if let Ok(uuid) = resp {
             let access_token = generate_jwt(&uuid).await?;
             let new_refresh_token = generate_refresh_token();
@@ -77,7 +77,7 @@ async fn generate_jwt(user_id: &str) -> Result<String, Error> {
         exp: expiration,
     };
 
-    let secret = env::var("JWT_SECRET").expect("");
+    let secret = env::var("JWT_SECRET").expect("expected jwt secret");
     let encoding_key = EncodingKey::from_secret(secret.as_bytes());
 
     Ok(encode(&Header::default(), &claims, &encoding_key)?)
@@ -107,7 +107,7 @@ async fn main() -> Result<(), Error> {
             "/refresh" => refresh_token_handler(event, &client).await,
             _ => Ok(Response::builder()
                 .status(400)
-                .body(format!("Unknown route {}", route_key).into())?),
+                .body(format!("Unknown route {route_key}").into())?),
         }
     }))
     .await
