@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WebsocketRequest",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "const": "create-game"
+        },
+        "capacity": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "deckType": {
+          "$ref": "#/$defs/DeckType"
+        },
+        "faceDown": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "name",
+        "faceDown",
+        "deckType"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "const": "draw-card-to-hand"
+        },
+        "deck": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "deck"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "const": "join-game"
+        },
+        "gameId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "gameId"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "const": "leave-game"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "const": "ping"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  ],
+  "$defs": {
+    "Card": {
+      "description": "If bit 7 is set, represents a special card\n If bit 6 is set, represents a face down card\n If special card, bits 0-5 represent the special card type\n If ordinary card, bits 2-5 represent the rank, and 0-1 represent the suit\n (0 - Space, 1 - Heart, 2 - Diamond, 3 - Club)",
+      "type": "integer",
+      "format": "uint8",
+      "minimum": 0
+    },
+    "DeckType": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "standard"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "custom": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Card"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "custom"
+          ]
+        }
+      ]
+    }
+  }
+}

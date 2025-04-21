@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WebsocketResponse",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "game-state"
+        },
+        "connectedPlayers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "gameId": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "visibleDecks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "type",
+        "gameId",
+        "owner",
+        "connectedPlayers",
+        "visibleDecks"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "deck-state"
+        },
+        "deckId": {
+          "type": "string"
+        },
+        "visibleCards": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              },
+              {
+                "$ref": "#/$defs/Card"
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "type",
+        "deckId",
+        "visibleCards"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "player-state"
+        },
+        "gameId": {
+          "type": "string"
+        },
+        "hand": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Card"
+          }
+        }
+      },
+      "required": [
+        "type",
+        "gameId",
+        "hand"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "error"
+        },
+        "error": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "error",
+        "message"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "close-game"
+        }
+      },
+      "required": [
+        "type"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "success"
+        }
+      },
+      "required": [
+        "type"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "pong"
+        }
+      },
+      "required": [
+        "type"
+      ]
+    }
+  ],
+  "$defs": {
+    "Card": {
+      "description": "If bit 7 is set, represents a special card\n If bit 6 is set, represents a face down card\n If special card, bits 0-5 represent the special card type\n If ordinary card, bits 2-5 represent the rank, and 0-1 represent the suit\n (0 - Space, 1 - Heart, 2 - Diamond, 3 - Club)",
+      "type": "integer",
+      "format": "uint8",
+      "minimum": 0
+    }
+  }
+}

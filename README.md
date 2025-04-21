@@ -3,10 +3,15 @@
 A mobile app that allows players to interact with a shared deck of cards.
 
 ## Roadmap
-Currently, this app is in development. Planned features are below:
+This app is currently in development and this list also acts as a todo list for features I
+think of to implement. Not every feature is guaranteed to be implemented.
+
+**Planned Features:**
 - [ ] MVP (deck of cards that can be interacted with, with player hands)
-- [ ] (backend): Move game store to in memory database (upstash)
-- [ ] Unit / integration testing
+- [ ] (frontend): Highlight face up cards in players hand
+- [ ] (backend): Move game store to in memory database (upstash) - can pop from list directly
+- [ ] (backend): Replace json encoding with protobuf for efficiency
+- [ ] (backend): Unit / integration testing
 - [ ] Enforced player turns
 - [ ] Multiple shared deck support (e.g multiple stacks)
 - [ ] Local only games, or locally discoverable tables
@@ -29,4 +34,7 @@ AWS CDK is used to deploy the lambda functions and configure the AWS environment
 ```shell
 bun install
 cdk deploy
+# Optional: generate JSON schema to validate kotlin data classes
+cd ../backend
+cargo run --bin schema
 ```

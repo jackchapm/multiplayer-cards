@@ -1682,6 +1682,7 @@ dependencies = [
  "aws-sdk-apigatewaymanagement",
  "aws-sdk-dynamodb",
  "aws_lambda_events",
+ "futures",
  "jsonwebtoken",
  "lambda_http",
  "lambda_runtime",
@@ -1690,6 +1691,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strum",
+ "thiserror",
  "tokio",
  "uuid",
 ]

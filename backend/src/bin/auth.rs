@@ -12,7 +12,7 @@ use serde_json::json;
 use uuid::Uuid;
 use multiplayer_cards::db_utils::{DynamoDBClient, RefreshToken};
 
-const TOKEN_EXPIRY: u64 = 15*60;
+const TOKEN_EXPIRY: u64 = 60*60;
 
 #[derive(Serialize, Deserialize)]
 pub struct AuthResponse {
@@ -43,6 +43,7 @@ async fn refresh_token_handler(event: Request, client: &DynamoDBClient) -> Resul
     };
 
     if let Some(token_str) = token {
+        // todo these possibly aren't getting deleted
         let resp = client.delete_entry::<RefreshToken>(&token_str.to_string(), None).await;
         if let Ok(uuid) = resp {
             let access_token = generate_jwt(&uuid).await?;
