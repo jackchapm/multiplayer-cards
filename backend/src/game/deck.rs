@@ -1,16 +1,16 @@
 use crate::db_utils::Key;
 use crate::game::GameId;
 use crate::message::{DeckOptions, DeckType, WebsocketResponse};
+use crate::message::WebsocketResponse::DeckState;
 use anyhow::{anyhow, Error};
 use rand::rng;
 use rand::seq::SliceRandom;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display, Formatter};
-use std::ops::{Deref, DerefMut, Sub};
+use std::ops::Sub;
 use strum::Display;
 use uuid::Uuid;
-use crate::message::WebsocketResponse::DeckState;
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Display)]
@@ -145,11 +145,13 @@ impl Display for Card {
 /// Format {game_id}:{deck_id}
 pub type DeckId = String;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Deck {
     pub(crate) id: DeckId,
     pub(super) cards: Vec<Card>,
     pub(super) visible_card_indexes: Vec<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub(super) capacity: Option<u32>,
 }
 
@@ -210,19 +212,5 @@ impl Deck {
                 (i, if card.is_face_down() { Card::HIDDEN_CARD } else { card })
             }).collect()
         }
-    }
-}
-
-// todo manually implement needed methods
-impl Deref for Deck {
-    type Target = Vec<Card>;
-    fn deref(&self) -> &Self::Target {
-        &self.cards
-    }
-}
-
-impl DerefMut for Deck {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.cards
     }
 }

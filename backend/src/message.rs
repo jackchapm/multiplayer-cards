@@ -1,12 +1,10 @@
-use anyhow::{anyhow, Error};
-use aws_sdk_apigatewaymanagement::Client;
+use crate::game::{Card, DeckId, GameId, PlayerId};
+use crate::{Services, WebsocketError};
+use anyhow::{Error};
 use aws_sdk_apigatewaymanagement::primitives::Blob;
-use crate::game::{Card, PlayerId, DeckId, GameId};
-use lambda_http::ext::request::JsonPayloadError;
 use lambda_http::{Request, RequestPayloadExt};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use crate::WebsocketError;
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(tag = "action")]
@@ -44,11 +42,17 @@ pub enum DeckType {
     Custom(Vec<Card>),
 }
 
-impl WebsocketRequest {
-    pub fn from_request(request: Request) -> Result<Self, Error> {
-        match request.json().map_err(|JsonPayloadError::Parsing(_)| anyhow!("error parsing json"))? {
+impl TryFrom<Request> for WebsocketRequest {
+    type Error = WebsocketError;
+
+    fn try_from(value: Request) -> Result<Self, Self::Error> {
+        let Ok(message) = value.json() else {
+            return Err(WebsocketError::InvalidRequest("error parsing json"))
+        };
+
+        match message {
             Some(msg) => Ok(msg),
-            None => Err(anyhow!("missing payload")),
+            None => Err(WebsocketError::InvalidRequest("no payload sent")),
         }
     }
 }
@@ -68,6 +72,7 @@ pub enum WebsocketResponse {
     },
     DeckState {
         deck_id: DeckId,
+        /// (index, value)
         visible_cards: Vec<(usize, Card)>,
     },
     PlayerState {
@@ -92,18 +97,34 @@ impl From<WebsocketError> for WebsocketResponse {
     }
 }
 
-impl WebsocketResponse {
-    pub async fn send(&self, apigw_client: &Client, conn_id: &str) -> Result<(), Error> {
-        let state_blob =  Blob::new(serde_json::to_string(self)?);
-        let _ = apigw_client.post_to_connection().connection_id(conn_id).data(state_blob.clone()).send().await?;
+impl Services {
+    pub async fn send<T: Serialize>(&self, conn_id: &str, data: &T) -> Result<(), Error> {
+        let state_blob = Blob::new(serde_json::to_string(data)?);
+        let _ = self
+            .expect_apigw()
+            .post_to_connection()
+            .connection_id(conn_id)
+            .data(state_blob.clone())
+            .send()
+            .await?;
         Ok(())
     }
 
     // todo change to unowned string
-    pub async fn send_batch<I: IntoIterator<Item = String>>(&self, apigw_client: &Client, connections: I) -> Result<(), Error> {
-        let state_blob =  Blob::new(serde_json::to_string(self)?);
+    pub async fn send_batch<T: Serialize, I: IntoIterator<Item = String>>(
+        &self,
+        connections: I,
+        data: &T,
+    ) -> Result<(), Error> {
+        let state_blob = Blob::new(serde_json::to_string(data)?);
         for conn_id in connections {
-            let _ = apigw_client.post_to_connection().connection_id(conn_id).data(state_blob.clone()).send().await?;
+            let _ = self
+                .expect_apigw()
+                .post_to_connection()
+                .connection_id(conn_id)
+                .data(state_blob.clone())
+                .send()
+                .await?;
         }
         Ok(())
     }

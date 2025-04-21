@@ -31,40 +31,38 @@ pub async fn function_handler(
         .get("Authorization")
         .and_then(|h| h.to_str().ok());
 
-    let token = match auth_header {
+    let Some(token) = (match auth_header {
         Some(header) if header.starts_with("Bearer ") => {
             Some(header.trim_start_matches("Bearer ").trim())
         }
         _ => None,
+    }) else {
+        return Ok(generate_response(
+            IamPolicyEffect::Deny,
+            event.payload.method_arn.expect("no arn given for auth"),
+            None,
+        ));
     };
 
     // identity source set for authorizer, so header SHOULD be present
     // we'll check anyway
-    if let Some(token) = token {
-        let secret = std::env::var("JWT_SECRET")?;
-        let decoding_key = DecodingKey::from_secret(secret.as_bytes());
-        let validation = Validation::default();
-        let arn = event.payload.method_arn.expect("no arn given for auth");
+    let secret = std::env::var("JWT_SECRET")?;
+    let decoding_key = DecodingKey::from_secret(secret.as_bytes());
+    let validation = Validation::default();
+    let arn = event.payload.method_arn.expect("no arn given for auth");
 
-        decode::<Claims>(token, &decoding_key, &validation)
-            .map(|t| t.claims)
-            .map_or_else(
-                |_| Ok(generate_response(IamPolicyEffect::Deny, arn.clone(), None)),
-                |claims| {
-                    Ok(generate_response(
-                        IamPolicyEffect::Allow,
-                        arn.clone(),
-                        Some(claims),
-                    ))
-                },
-            )
-    } else {
-        Ok(generate_response(
-            IamPolicyEffect::Deny,
-            event.payload.method_arn.expect("no arn given for auth"),
-            None,
-        ))
-    }
+    decode::<Claims>(token, &decoding_key, &validation)
+        .map(|t| t.claims)
+        .map_or_else(
+            |_| Ok(generate_response(IamPolicyEffect::Deny, arn.clone(), None)),
+            |claims| {
+                Ok(generate_response(
+                    IamPolicyEffect::Allow,
+                    arn.clone(),
+                    Some(claims),
+                ))
+            },
+        )
 }
 
 fn generate_response(

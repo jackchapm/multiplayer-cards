@@ -1,20 +1,14 @@
-use aws_sdk_apigatewaymanagement as apigw_management;
-use aws_sdk_dynamodb as dynamodb;
 use lambda_http::{
     request::RequestContext, run, service_fn, tracing, Body, Error, IntoResponse, Request,
     RequestExt, Response,
 };
-use multiplayer_cards::db_utils::{Connection, DynamoDBClient};
+use multiplayer_cards::db_utils::Connection;
+use multiplayer_cards::game::{Game, Player, PlayerId};
+use multiplayer_cards::message::WebsocketResponse::Success;
 use multiplayer_cards::message::{WebsocketRequest, WebsocketResponse};
-use std::env;
-use multiplayer_cards::game::{Game, Player};
-use multiplayer_cards::WebsocketError;
+use multiplayer_cards::{Services, WebsocketError};
 
-async fn websocket_handler(
-    event: Request,
-    dd_client: &DynamoDBClient,
-    apigw_client: &apigw_management::Client,
-) -> Result<Response<Body>, Error> {
+async fn websocket_handler(event: Request, services: &Services) -> Result<Response<Body>, Error> {
     let RequestContext::WebSocket(context) = event.request_context() else {
         return Err("expected websocket".into());
     };
@@ -24,80 +18,40 @@ async fn websocket_handler(
         .authorizer
         .fields
         .get("uuid")
-        .unwrap()
+        .expect("request authorizer not found")
         .as_str()
         .unwrap()
         .to_string();
 
-    let conn_id = &context.connection_id.unwrap();
+    let conn_id = &context.connection_id.expect("no connection id received");
 
     match context.route_key.expect("no route key").as_str() {
         "$connect" => {
-            if let Some(old_connection) =
-                dd_client.get_entry::<Connection>(&uuid).await
-            {
+            if let Some(old_connection) = services.get::<Connection>(&uuid).await {
                 // Try disconnect any current open connection
                 // It's okay if this is unsuccessful, the other connection will hang as there is no reference to its connection id
-                let _ = apigw_client
+                services
+                    .expect_apigw()
                     .delete_connection()
                     .connection_id(old_connection)
                     .send()
-                    .await;
+                    .await?;
             }
 
-            let _ = dd_client
-                .put_entry::<Connection>(&uuid, conn_id)
-                .await;
+            let _ = services.put::<Connection>(&uuid, conn_id).await;
         }
         "$disconnect" => {
-            let _ = dd_client
-                .delete_entry::<Connection>(&uuid, Some(conn_id))
-                .await;
+            let _ = services.delete::<Connection>(&uuid, Some(conn_id)).await;
         }
         "$default" => {
-            let message = WebsocketRequest::from_request(event)?;
-            // todo fix possible race conditions when pulling from db
-            match message {
-                WebsocketRequest::CreateGame { name, deck_options}=> {
-                    if let Some(_) = dd_client.get_entry::<Player>(&uuid).await {
-                        let response: WebsocketResponse = WebsocketError::AlreadyInGame.into();
-                        response.send(apigw_client, conn_id).await?
-                    } else {
-                        let _ = Game::new(apigw_client, dd_client, uuid, conn_id, &deck_options).await?;
-                    }
-                }
-                WebsocketRequest::DrawCardToHand { deck } => todo!(),
-                WebsocketRequest::JoinGame { game_id } => {
-                    let game = dd_client.get_entry::<Game>(&game_id).await;
-                    if let Some(mut game) = game {
-                        game.add_player(apigw_client, dd_client, uuid, conn_id).await?;
-                    } else {
-                        let response: WebsocketResponse = WebsocketError::NonExistentGame(game_id).into();
-                        response.send(apigw_client, conn_id).await?
-                    }
-                },
-                WebsocketRequest::LeaveGame => {
-                    if let Some(player) = dd_client.get_entry::<Player>(&uuid).await {
-                        let mut game = player.get_game(dd_client).await;
-                        game.remove_player(apigw_client, dd_client, uuid, false).await?;
-                    } else {
-                        let response: WebsocketResponse = WebsocketError::NotInGame.into();
-                        response.send(apigw_client, conn_id).await?
-                    }
-                },
-                WebsocketRequest::Ping => {
-                    if let Some(player) = dd_client.get_entry::<Player>(&uuid).await {
-                        player.send_state(apigw_client, dd_client, Some(conn_id)).await?;
-                        let game = player.get_game(dd_client).await;
-                        game.send_state(apigw_client, conn_id).await?;
-                        for deck in &game.decks {
-                            game.send_deck_state(apigw_client, dd_client, deck, conn_id).await?;
-                        }
-                    } else {
-                        WebsocketResponse::Pong.send(apigw_client, conn_id).await?
-                    }
-                },
-            }
+            let response = match WebsocketRequest::try_from(event) {
+                Ok(message) => handle_message(services, message, uuid, conn_id)
+                    .await
+                    .unwrap_or_else(|e| WebsocketError::ServiceError(e.to_string()).into()),
+                Err(error) => error.into(),
+            };
+
+            services.send(conn_id, &response).await?;
         }
         _ => return Err("unhandled message".into()),
     }
@@ -105,23 +59,64 @@ async fn websocket_handler(
     Ok("handled request".into_response().await)
 }
 
+async fn handle_message(
+    services: &Services,
+    message: WebsocketRequest,
+    uuid: PlayerId,
+    conn_id: &str,
+) -> Result<WebsocketResponse, Error> {
+    // todo fix possible race conditions when pulling from db
+    Ok(match message {
+        WebsocketRequest::CreateGame { name, deck_options } => {
+            if let Some(_) = services.get::<Player>(&uuid).await {
+                WebsocketError::AlreadyInGame.into()
+            } else {
+                Game::new(services, uuid, conn_id, &deck_options).await?;
+                Success
+            }
+        }
+        WebsocketRequest::DrawCardToHand { deck } => todo!(),
+        WebsocketRequest::JoinGame { game_id } => {
+            let game = services.get::<Game>(&game_id).await;
+            if let Some(mut game) = game {
+                game.add_player(services, uuid, conn_id).await?;
+                Success
+            } else {
+                WebsocketError::NonExistentGame(game_id).into()
+            }
+        }
+        WebsocketRequest::LeaveGame => {
+            if let Some(player) = services.get::<Player>(&uuid).await {
+                let mut game = player.get_game(services).await;
+                game.remove_player(services, uuid, false).await?;
+                Success
+            } else {
+                WebsocketError::NotInGame.into()
+            }
+        }
+        WebsocketRequest::Ping => {
+            if let Some(player) = services.get::<Player>(&uuid).await {
+                player.send_state(services, Some(conn_id)).await?;
+                let game = player.get_game(services).await;
+                game.send_state(services, conn_id).await?;
+                for deck in &game.decks {
+                    game.send_deck_state(services, deck, conn_id).await?;
+                }
+            }
+
+            WebsocketResponse::Pong
+        }
+    })
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     tracing::init_default_subscriber();
-    let endpoint_url = env::var("WEBSOCKET_ENDPOINT").expect("websocket endpoint not set");
-    let table_name = env::var("TABLE_NAME").expect("table name not set");
-    let shared_conf = &aws_config::load_from_env().await;
 
-    // todo create struct to pass around config and apigw client together
-    let apigw_config = apigw_management::config::Builder::from(shared_conf)
-        .endpoint_url(endpoint_url)
-        .build();
-    let apigw_client = apigw_management::Client::from_conf(apigw_config);
-
-    let dd_client = DynamoDBClient::new(dynamodb::Client::new(shared_conf), table_name);
+    let services = Services::create().await;
 
     run(service_fn(async |request| {
-        websocket_handler(request, &dd_client, &apigw_client).await
+        websocket_handler(request, &services).await
     }))
     .await
 }
