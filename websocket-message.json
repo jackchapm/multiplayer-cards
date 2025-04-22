@@ -7,31 +7,65 @@
       "properties": {
         "action": {
           "type": "string",
-          "const": "create-game"
+          "const": "join-game"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "const": "take-card"
         },
-        "capacity": {
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint32",
-          "minimum": 0
-        },
-        "deckType": {
-          "$ref": "#/$defs/DeckType"
+        "stack": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "stack"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "const": "put-card"
         },
         "faceDown": {
           "type": "boolean"
         },
-        "name": {
-          "type": "string"
+        "handIndex": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "position": {
+          "type": "array",
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "integer",
+              "format": "int8"
+            },
+            {
+              "type": "integer",
+              "format": "int8"
+            }
+          ]
         }
       },
       "required": [
         "action",
-        "name",
-        "faceDown",
-        "deckType"
+        "handIndex",
+        "position",
+        "faceDown"
       ]
     },
     {
@@ -39,15 +73,15 @@
       "properties": {
         "action": {
           "type": "string",
-          "const": "draw-card-to-hand"
+          "const": "flip-card"
         },
-        "deck": {
+        "stack": {
           "type": "string"
         }
       },
       "required": [
         "action",
-        "deck"
+        "stack"
       ]
     },
     {
@@ -55,15 +89,145 @@
       "properties": {
         "action": {
           "type": "string",
-          "const": "join-game"
+          "const": "flip-stack"
         },
-        "gameId": {
+        "stack": {
           "type": "string"
         }
       },
       "required": [
         "action",
-        "gameId"
+        "stack"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "const": "move-card"
+        },
+        "position": {
+          "type": "array",
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "integer",
+              "format": "int8"
+            },
+            {
+              "type": "integer",
+              "format": "int8"
+            }
+          ]
+        },
+        "stack": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "stack",
+        "position"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "const": "move-stack"
+        },
+        "position": {
+          "type": "array",
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "integer",
+              "format": "int8"
+            },
+            {
+              "type": "integer",
+              "format": "int8"
+            }
+          ]
+        },
+        "stack": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "stack",
+        "position"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "const": "shuffle"
+        },
+        "stack": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "stack"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "const": "deal"
+        },
+        "stack": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "stack"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "const": "give-player"
+        },
+        "handIndex": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "tradeTo": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "handIndex",
+        "tradeTo"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "const": "reset"
+        }
+      },
+      "required": [
+        "action"
       ]
     },
     {
@@ -90,38 +254,5 @@
         "action"
       ]
     }
-  ],
-  "$defs": {
-    "Card": {
-      "description": "If bit 7 is set, represents a special card\n If bit 6 is set, represents a face down card\n If special card, bits 0-5 represent the special card type\n If ordinary card, bits 2-5 represent the rank, and 0-1 represent the suit\n (0 - Space, 1 - Heart, 2 - Diamond, 3 - Club)",
-      "type": "integer",
-      "format": "uint8",
-      "minimum": 0
-    },
-    "DeckType": {
-      "oneOf": [
-        {
-          "type": "string",
-          "enum": [
-            "standard"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "custom": {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/Card"
-              }
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "custom"
-          ]
-        }
-      ]
-    }
-  }
+  ]
 }

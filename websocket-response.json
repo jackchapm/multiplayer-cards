@@ -21,10 +21,10 @@
         "owner": {
           "type": "string"
         },
-        "visibleDecks": {
+        "stacks": {
           "type": "array",
           "items": {
-            "type": "string"
+            "$ref": "#/$defs/StackState"
           }
         }
       },
@@ -33,42 +33,7 @@
         "gameId",
         "owner",
         "connectedPlayers",
-        "visibleDecks"
-      ]
-    },
-    {
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "const": "deck-state"
-        },
-        "deckId": {
-          "type": "string"
-        },
-        "visibleCards": {
-          "type": "array",
-          "items": {
-            "type": "array",
-            "maxItems": 2,
-            "minItems": 2,
-            "prefixItems": [
-              {
-                "type": "integer",
-                "format": "uint",
-                "minimum": 0
-              },
-              {
-                "$ref": "#/$defs/Card"
-              }
-            ]
-          }
-        }
-      },
-      "required": [
-        "type",
-        "deckId",
-        "visibleCards"
+        "stacks"
       ]
     },
     {
@@ -143,6 +108,18 @@
       "properties": {
         "type": {
           "type": "string",
+          "const": "no-response"
+        }
+      },
+      "required": [
+        "type"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
           "const": "pong"
         }
       },
@@ -153,10 +130,47 @@
   ],
   "$defs": {
     "Card": {
-      "description": "If bit 7 is set, represents a special card\n If bit 6 is set, represents a face down card\n If special card, bits 0-5 represent the special card type\n If ordinary card, bits 2-5 represent the rank, and 0-1 represent the suit\n (0 - Space, 1 - Heart, 2 - Diamond, 3 - Club)",
+      "description": "If bit 7 is set, represents a face down card\n If bit 6 is set, represents a special card\n If special card, bits 0-5 represent the special card type\n If ordinary card, bits 2-5 represent the rank, and 0-1 represent the suit\n (0 - Space, 1 - Heart, 2 - Diamond, 3 - Club)",
       "type": "integer",
       "format": "uint8",
       "minimum": 0
+    },
+    "StackState": {
+      "type": "object",
+      "properties": {
+        "position": {
+          "type": "array",
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "integer",
+              "format": "int8"
+            },
+            {
+              "type": "integer",
+              "format": "int8"
+            }
+          ]
+        },
+        "remainingCards": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "stackId": {
+          "type": "string"
+        },
+        "visibleCard": {
+          "$ref": "#/$defs/Card"
+        }
+      },
+      "required": [
+        "stackId",
+        "position",
+        "visibleCard",
+        "remainingCards"
+      ]
     }
   }
 }
