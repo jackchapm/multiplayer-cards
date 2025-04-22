@@ -119,13 +119,9 @@ impl Card {
     pub fn suit(&self) -> Option<Suit> {
         self.is_numerical().then(|| Suit::from_u8(self.0))
     }
-
-    pub fn as_face_down(&self) -> Card {
-        Card(self.0 | 0b0100_0000)
-    }
     
-    pub fn flip(mut self) {
-        self.0 |= 0b0100_0000
+    pub fn flip(&mut self) {
+        self.0 ^= 0b0100_0000
     }
 }
 

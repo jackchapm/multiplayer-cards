@@ -189,7 +189,7 @@ impl Game {
             // todo handle deleting this stack
             return Err(WebsocketError::EmptyStack)
         }
-        stack.cards[stack.cards.len() - 1].flip();
+        stack.cards.last_mut().unwrap().flip();
         self.save_and_send(services).await?;
         Ok(())
     }
@@ -247,14 +247,26 @@ impl Game {
         Ok(())
     }
 
-    pub async fn put_card(&mut self, services: &Services, player_id: &PlayerId, hand_index: usize, position: (i8, i8), conn_id: &str) -> Result<(), WebsocketError> {
+    // todo determine whether face up or down
+    pub async fn put_card(
+        &mut self,
+        services: &Services,
+        player_id: &PlayerId,
+        hand_index: usize,
+        position: (i8, i8),
+        face_down: bool,
+        conn_id: &str
+    ) -> Result<(), WebsocketError> {
         let mut player = self.get_player(services, player_id).await?;
         if hand_index >= player.hand.len() {
             return Err(WebsocketError::CardNotFound)
         }
 
         let target_stack = self.stack_at_position(position, true).unwrap();
-        let card = player.hand.swap_remove(hand_index);
+        let mut card = player.hand.swap_remove(hand_index);
+        if face_down != card.is_face_down() {
+            card.flip()
+        } 
         target_stack.cards.push(card);
         player.send_state(services, conn_id).await?;
         services.put::<Player>(&player.player_id, &player).await?;

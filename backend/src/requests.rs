@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 pub enum WebsocketRequest {
     JoinGame,
     TakeCard { stack: StackId },
-    PutCard { hand_index: usize, position: (i8, i8)},
+    PutCard { hand_index: usize, position: (i8, i8), face_down: bool },
     FlipCard { stack: StackId },
     FlipStack { stack: StackId },
     MoveCard { stack: StackId, position: (i8, i8) },

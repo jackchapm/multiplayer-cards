@@ -97,8 +97,8 @@ async fn handle_message(
         WebsocketRequest::TakeCard { stack } => {
             game.take_card(services, stack, &uuid, conn_id).await?
         }
-        WebsocketRequest::PutCard { hand_index, position} => {
-            game.put_card(services, &uuid, hand_index, position, conn_id).await?
+        WebsocketRequest::PutCard { hand_index, position, face_down} => {
+            game.put_card(services, &uuid, hand_index, position, face_down, conn_id).await?
         }
         WebsocketRequest::FlipCard { stack } => game.flip_card(services, stack).await?,
         WebsocketRequest::MoveStack { stack, position } => {
