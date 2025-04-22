@@ -1,20 +1,18 @@
 use std::env;
-use serde::{Deserialize, Serialize};
+use anyhow::Error;
+use serde::{Serialize};
 use strum::IntoStaticStr;
 use thiserror::Error;
 use crate::game::GameId;
 
 pub mod db_utils;
-pub mod message;
+pub mod requests;
 pub mod game;
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Claims {
-    pub sub: String,
-    pub exp: usize,
-}
+pub mod auth;
+pub mod utils;
 
 #[derive(Debug, Serialize, Error, IntoStaticStr)]
+#[serde(rename_all="kebab-case")]
 #[strum(serialize_all="kebab-case")]
 pub enum WebsocketError {
     #[error("the game `{0}` does not exist")]
@@ -25,6 +23,9 @@ pub enum WebsocketError {
 
     #[error("you cannot do this whilst already in game")]
     AlreadyInGame,
+
+    #[error("can't shuffle deck whilst cards are in play")]
+    DeckInPlay,
 
     #[error("{0}")]
     InvalidRequest(&'static str),
@@ -63,5 +64,14 @@ impl Services {
 
     pub fn expect_apigw(&self) -> &aws_sdk_apigatewaymanagement::Client {
         self.apigw.as_ref().expect("no API Gateway client initialised")
+    }
+
+    pub async fn delete_connection(&self, conn_id: &str) -> Result<(), Error> {
+        self.expect_apigw()
+            .delete_connection()
+            .connection_id(conn_id)
+            .send()
+            .await?;
+        Ok(())
     }
 }

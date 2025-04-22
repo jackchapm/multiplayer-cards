@@ -1,12 +1,12 @@
-use crate::db_utils::{Connection, Key};
-use crate::message::{DeckOptions, WebsocketResponse};
-use crate::message::WebsocketResponse::GameState;
+use std::collections::HashMap;
+use crate::db_utils::{Key};
+use crate::requests::{DeckType, WebsocketResponse};
+use crate::requests::WebsocketResponse::GameState;
 use crate::Services;
 use anyhow::{anyhow, Error};
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 use std::time::{SystemTime, UNIX_EPOCH};
-use futures::future::join_all;
 use uuid::Uuid;
 
 mod deck;
@@ -20,13 +20,13 @@ pub type GameId = String;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Game {
     pub id: GameId,
-    pub created_at: u64,
-    pub owner: PlayerId,
-    // todo with current structure, could possibly be just a single deck id?
-    pub decks: Vec<DeckId>,
-    // This would ideally be a set, but as this struct is not kept in memory
-    // it is more expensive to deserialise a set every time
-    pub players: Vec<PlayerId>,
+    pub created_at: u64, //todo move to separate game data object
+    pub owner: PlayerId, // todo move to separate game data object
+    pub authorized_players: Vec<PlayerId>, // todo move to separate game data object
+    
+    // todo This is rarely queried, convert into a vec that stores both (tuple?)
+    pub connected_players: HashMap<PlayerId, String>,
+    pub stacks: Vec<Stack>,
     #[serde(skip)]
     _private: PhantomData<()>,
 }
@@ -45,25 +45,23 @@ impl Game {
     pub async fn new(
         services: &Services,
         player_id: PlayerId,
-        conn_id: &str,
-        deck_options: &DeckOptions,
+        deck_type: DeckType,
     ) -> Result<Self, Error> {
         let game_id = Uuid::new_v4().to_string();
 
-        let deck = Deck::from_options(deck_options, &game_id);
-        services.put::<Deck>(&deck.id, &deck).await?;
-
-        let mut new_game = Self {
+        let stacks = Stack::from(deck_type);
+        
+        let new_game = Self {
             id: game_id,
             created_at: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
             owner: player_id.clone(),
-            decks: vec![deck.id.clone()],
-            players: vec![],
+            authorized_players: vec![player_id],
+            connected_players: HashMap::new(),
+            stacks,
             _private: PhantomData,
         };
 
-        // No need to add the game to the database yet, as it will be done inside the add_player call
-        new_game.add_player(services, player_id, conn_id).await?;
+        services.put::<Game>(&new_game.id, &new_game).await?;
         Ok(new_game)
     }
 
@@ -73,36 +71,38 @@ impl Game {
         player_id: PlayerId,
         conn_id: &str,
     ) -> Result<Player, Error> {
-        let player = Player::new(services, player_id.clone(), self.id.clone()).await?;
-        self.players.push(player_id.clone());
+        let player = match services.get::<Player>(&player_id).await {
+            Some(player) => player,
+            None => Player::new(services, player_id.clone(), self.id.clone()).await?,
+        };
+        self.connected_players.insert(player_id.clone(), conn_id.to_string());
         services.put::<Game>(&self.id, &self).await?;
         self.send_state_all(services, &self.state()).await?;
-        for deck_id in &self.decks {
-            self.send_deck_state(services, &deck_id, conn_id).await?
-        }
         player.send_state(services, Some(conn_id)).await?;
         Ok(player)
     }
 
-    pub async fn remove_player(
+    pub async fn add_authorized_player(
         &mut self,
         services: &Services,
-        player_id: PlayerId,
-        save_data: bool,
+        player_id: PlayerId
     ) -> Result<(), Error> {
-        if let Some(index) = self.players.iter().position(|p| p == &player_id) {
-            self.players.swap_remove(index);
-        } else {
+        self.authorized_players.push(player_id);
+        services.put::<Game>(&self.id, &self).await?;
+        Ok(())
+    }
+
+    pub async fn remove_player(
+        mut self,
+        services: &Services,
+        player_id: PlayerId,
+    ) -> Result<(), Error> {
+        if let None = self.connected_players.remove(&player_id) {
             return Err(anyhow!("player not in this game"))
         }
-
-        if !save_data {
-            // todo add sanity check that players current game is the one we are removing from
-            // need to write condition expression
-            let _ = services.delete::<Player>(&player_id, None).await?;
-        }
-
-        if self.players.is_empty() {
+        // Keep player state in database incase they join back
+        
+        if self.connected_players.is_empty() {
             self.destroy(services).await?;
             return Ok(())
         }
@@ -110,22 +110,23 @@ impl Game {
         if self.owner == player_id {
             // Game owner has left, assign new owner
             // can safely call unwrap as we know the list is not empty
-            self.owner = self.players.first().unwrap().clone();
+            self.owner = self.connected_players.values().next().unwrap().clone();
         }
         // todo only send update, not full state
+        services.put::<Game>(&self.id, &self).await?;
         self.send_state_all(services, &self.state()).await?;
         Ok(())
     }
 
-    pub async fn destroy(&mut self, services: &Services) -> Result<(), Error> {
+    pub async fn destroy(mut self, services: &Services) -> Result<(), Error> {
         services.delete::<Game>(&self.id, None).await?;
-        for player in &self.players {
+        for player in &self.authorized_players {
             services.delete::<Player>(&player, None).await?;
         }
-        for deck in &self.decks {
-            let _ = services.delete::<Deck>(&deck, None).await?;
-        }
         self.send_state_all(services, &WebsocketResponse::CloseGame).await?;
+        for (_, conn_id) in self.connected_players.into_iter() {
+            let _ = services.delete_connection(&conn_id).await;
+        }
         Ok(())
     }
 
@@ -134,8 +135,9 @@ impl Game {
         GameState {
             owner: self.owner.clone(),
             game_id: self.id.clone(),
-            connected_players: self.players.iter().cloned().collect(),
-            visible_decks: self.decks.clone(),
+            // todo check performance on this call
+            connected_players: self.connected_players.keys().cloned().collect(),
+            stacks: self.stacks.iter().map(Stack::state).collect()
         }
     }
 
@@ -143,28 +145,8 @@ impl Game {
         services.send(conn_id, &self.state()).await
     }
 
-    pub async fn send_deck_state(&self, services: &Services, deck: &DeckId, conn_id: &str) -> Result<(), Error> {
-        let deck_state = services.get::<Deck>(&deck).await.expect("deck refereneced in game not in database").state();
-        services.send(conn_id, &deck_state).await?;
-        Ok(())
-    }
-
     /// Send a websocket response to all players connected to the game
     async fn send_state_all(&mut self, services: &Services, data: &WebsocketResponse) -> Result<(), Error> {
-        let players = self.players.clone();
-        let connections = join_all(players
-            .iter()
-            .map(async |uuid| {
-                (uuid, services.get::<Connection>(uuid).await)
-            }));
-
-        let connections: Vec<_> = connections.await.into_iter().filter_map(|(_uuid, c)| if c.is_none() {
-            // todo check how long connection has been stale and possibly clean up?
-            None
-        } else {
-            Some(c.unwrap())
-        }).collect();
-
-        services.send_batch(connections, data).await
+        services.send_batch(self.connected_players.values(), data).await
     }
 }

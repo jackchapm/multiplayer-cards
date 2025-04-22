@@ -1,19 +1,9 @@
-use aws_lambda_events::apigw::{
-    ApiGatewayCustomAuthorizerPolicy, ApiGatewayCustomAuthorizerRequestTypeRequest,
-    ApiGatewayCustomAuthorizerResponse,
-};
+use aws_lambda_events::apigw::{ApiGatewayCustomAuthorizerPolicy, ApiGatewayCustomAuthorizerRequestTypeRequest, ApiGatewayCustomAuthorizerResponse};
 use aws_lambda_events::iam::{IamPolicyEffect, IamPolicyStatement};
 use jsonwebtoken::{decode, DecodingKey, Validation};
 use lambda_runtime::{run, service_fn, tracing, Error, LambdaEvent};
-use multiplayer_cards::Claims;
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-
-#[derive(Serialize, Deserialize)]
-pub struct AuthorizationContext {
-    pub uuid: String,
-    pub expires: usize,
-}
+use serde_json::{json};
+use multiplayer_cards::auth::{AuthorizationContext, Claims, HTTP_AUDIENCE, WEBSOCKET_AUDIENCE};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -31,6 +21,8 @@ pub async fn function_handler(
         .get("Authorization")
         .and_then(|h| h.to_str().ok());
 
+    let method_arn = event.payload.method_arn.expect("no arn given for auth");
+
     let Some(token) = (match auth_header {
         Some(header) if header.starts_with("Bearer ") => {
             Some(header.trim_start_matches("Bearer ").trim())
@@ -39,33 +31,38 @@ pub async fn function_handler(
     }) else {
         return Ok(generate_response(
             IamPolicyEffect::Deny,
-            event.payload.method_arn.expect("no arn given for auth"),
+            method_arn,
             None,
         ));
     };
-
-    // identity source set for authorizer, so header SHOULD be present
-    // we'll check anyway
+    
     let secret = std::env::var("JWT_SECRET")?;
     let decoding_key = DecodingKey::from_secret(secret.as_bytes());
-    let validation = Validation::default();
-    let arn = event.payload.method_arn.expect("no arn given for auth");
+
+    // todo move to services struct?
+    let websocket_arn = std::env::var("WEBSOCKET_ARN").expect("websocket arn not set");
+    let mut validation = Validation::default();
+    if method_arn == websocket_arn {
+        validation.set_audience(&[WEBSOCKET_AUDIENCE])
+    } else {
+        validation.set_audience(&[HTTP_AUDIENCE])
+    }
 
     decode::<Claims>(token, &decoding_key, &validation)
         .map(|t| t.claims)
         .map_or_else(
-            |_| Ok(generate_response(IamPolicyEffect::Deny, arn.clone(), None)),
+            |_| Ok(generate_response(IamPolicyEffect::Deny, method_arn.clone(), None)),
             |claims| {
                 Ok(generate_response(
                     IamPolicyEffect::Allow,
-                    arn.clone(),
+                    method_arn.clone(),
                     Some(claims),
                 ))
             },
         )
 }
 
-fn generate_response(
+pub fn generate_response(
     effect: IamPolicyEffect,
     arn: String,
     claims: Option<Claims>,
@@ -86,9 +83,10 @@ fn generate_response(
                 json!(AuthorizationContext {
                     uuid: claims.sub,
                     expires: claims.exp,
+                    game_id: claims.game_id
                 })
             })
-            .unwrap_or(Value::Null),
+            .unwrap_or_else(|| json!({})),
         usage_identifier_key: None,
     }
 }

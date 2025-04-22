@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io::{Error, Write};
 use schemars::schema_for;
-use multiplayer_cards::message::{WebsocketRequest, WebsocketResponse};
+use multiplayer_cards::requests::{WebsocketRequest, WebsocketResponse};
 
 fn main() -> Result<(), Error> {
     let request_schema = schema_for!(WebsocketRequest);

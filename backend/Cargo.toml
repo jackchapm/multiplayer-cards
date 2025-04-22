@@ -6,13 +6,12 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0"
 aws-config = { version = "1", features = ["behavior-version-latest"] }
-aws_lambda_events = { version = "0.16.0", optional = true }
+aws_lambda_events = { version = "0.16.0"}
 aws-sdk-apigatewaymanagement = "1"
 aws-sdk-dynamodb = { version = "1" }
-futures = "0.3"
 jsonwebtoken = "9"
 lambda_http = { version = "0.14.0", features = ["anyhow"] }
-lambda_runtime = { version = "0.13.0", optional = true }
+lambda_runtime = { version = "0.13.0"}
 rand = "0.9"
 schemars = { version = "1.0.0-alpha" }
 serde = { version = "1.0", features = ["derive"] }
@@ -22,12 +21,13 @@ thiserror = "2"
 tokio = { version = "1", features = ["macros"] }
 uuid = { version = "1", features = ["v4"] }
 
-[features]
-build-authorizer = ["lambda_runtime", "aws_lambda_events"]
+[profile.release]
+strip = true
+lto = "thin"
 
 [[bin]]
-name = "auth"
-path = "src/bin/auth.rs"
+name = "http"
+path = "src/bin/http.rs"
 
 [[bin]]
 name = "websocket_handler"
@@ -36,4 +36,3 @@ path = "src/bin/websocket_handler.rs"
 [[bin]]
 name = "lambda-authorizer"
 path = "src/bin/authorizer.rs"
-required-features = ["build-authorizer"]

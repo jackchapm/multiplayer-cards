@@ -15,7 +15,7 @@ import {
 import {HttpLambdaIntegration, WebSocketLambdaIntegration} from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as config from '../config.json'
 import {AttributeType, BillingMode, Table} from 'aws-cdk-lib/aws-dynamodb';
-import {WebSocketLambdaAuthorizer} from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
+import {HttpLambdaAuthorizer, WebSocketLambdaAuthorizer} from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 
 const BASE_PATH = path.join(__dirname, '..', '..', 'backend')
 const CERT_ARN = config.certificateArn
@@ -32,14 +32,16 @@ export class MultiplayerCardsStack extends cdk.Stack {
       removalPolicy: RemovalPolicy.DESTROY,
     })
 
-    const authDomain = new DomainName(this, 'AuthDomain', {
+    const domainCert = acm.Certificate.fromCertificateArn(this, 'Cert', CERT_ARN);
+
+    const httpDomain = new DomainName(this, 'HttpDomain', {
       domainName: config.devHttpDomain,
-      certificate: acm.Certificate.fromCertificateArn(this, 'authCert', CERT_ARN),
+      certificate: domainCert,
     });
 
     const webSocketDomain = new DomainName(this, 'WebSocketDomain', {
       domainName: config.devWebSocketDomain,
-      certificate: acm.Certificate.fromCertificateArn(this, 'webSocketCert', CERT_ARN),
+      certificate: domainCert,
     });
 
     const authorizerFunction = new RustFunction(this, 'lambda-authorizer', {
@@ -47,9 +49,6 @@ export class MultiplayerCardsStack extends cdk.Stack {
       binaryName: 'lambda-authorizer',
       environment: {
         'JWT_SECRET': config.jwtSecret,
-      },
-      bundling: {
-        cargoLambdaFlags: ['--features', 'build-authorizer'],
       },
     });
 
@@ -63,15 +62,20 @@ export class MultiplayerCardsStack extends cdk.Stack {
     });
     table.grantReadWriteData(websocketFunction);
 
-    const authorizer = new WebSocketLambdaAuthorizer('WebSocketAuthorizer', authorizerFunction, {
+    const websocketAuthorizer = new WebSocketLambdaAuthorizer('WebSocketAuthorizer', authorizerFunction, {
       identitySource: ['route.request.header.Authorization'],
       authorizerName: "websocket-authorizer",
+    });
+
+    const httpAuthorizer = new HttpLambdaAuthorizer('HttpAuthorizer', authorizerFunction, {
+      identitySource: ['$request.header.Authorization'],
+      authorizerName: "http-authorizer",
     });
 
     // Distinct integrations required per route otherwise execute permissions aren't setup correctly (only for websockets)
     // https://github.com/aws/aws-cdk/issues/22940
     const webSocketApi = new WebSocketApi(this, 'multiplayer-cards-websocket', {
-      connectRouteOptions: {integration: new WebSocketLambdaIntegration('WebSocketConnectIntegration', websocketFunction), authorizer: authorizer},
+      connectRouteOptions: {integration: new WebSocketLambdaIntegration('WebSocketConnectIntegration', websocketFunction), authorizer: websocketAuthorizer},
       disconnectRouteOptions: {integration: new WebSocketLambdaIntegration('WebSocketDisconnectIntegration', websocketFunction)},
       defaultRouteOptions: {integration: new WebSocketLambdaIntegration('WebSocketDefaultIntegration', websocketFunction)},
     });
@@ -85,41 +89,55 @@ export class MultiplayerCardsStack extends cdk.Stack {
       autoDeploy: true,
     });
 
+    authorizerFunction.addEnvironment("WEBSOCKET_ARN", webSocketApi.arnForExecuteApiV2("$connect", webSocketStage.stageName))
     websocketFunction.addEnvironment('WEBSOCKET_ENDPOINT', webSocketStage.callbackUrl);
     webSocketApi.grantManageConnections(websocketFunction);
 
-    const authFunction = new RustFunction(this, 'auth-function', {
+    const httpFunction = new RustFunction(this, 'http-function', {
       manifestPath: BASE_PATH,
-      binaryName: 'auth',
+      binaryName: 'http',
       environment: {
         'TABLE_NAME': table.tableName,
         'JWT_SECRET': config.jwtSecret, //todo better secret storage
       },
     });
-    table.grantReadWriteData(authFunction);
+    table.grantReadWriteData(httpFunction);
 
-    const authApi = new HttpApi(this, 'multiplayer-cards-auth', {
+    const httpApi = new HttpApi(this, 'multiplayer-cards-http', {
       createDefaultStage: false,
     });
 
-    const authIntegration = new HttpLambdaIntegration('AuthIntegration', authFunction);
+    const httpIntegration = new HttpLambdaIntegration('HttpIntegration', httpFunction);
 
-    authApi.addRoutes({
-      path: '/guest',
+    httpApi.addRoutes({
+      path: '/auth/guest',
       methods: [ HttpMethod.POST ],
-      integration: authIntegration,
+      integration: httpIntegration,
     });
-    authApi.addRoutes({
-      path: '/refresh',
+    httpApi.addRoutes({
+      path: '/auth/refresh',
       methods: [ HttpMethod.POST ],
-      integration: authIntegration,
+      integration: httpIntegration,
     });
 
-    new HttpStage(this, 'AuthDevStage', {
-      httpApi: authApi,
+    // Authorised routes
+    httpApi.addRoutes({
+      path: '/game/create',
+      methods: [ HttpMethod.POST ],
+      authorizer: httpAuthorizer,
+      integration: httpIntegration,
+    });
+    httpApi.addRoutes({
+      path: '/game/join',
+      methods: [ HttpMethod.POST ],
+      authorizer: httpAuthorizer,
+      integration: httpIntegration,
+    });
+
+    new HttpStage(this, 'HttpDevStage', {
+      httpApi: httpApi,
       domainMapping: {
-        domainName: authDomain,
-        mappingKey: 'auth',
+        domainName: httpDomain,
       },
       stageName: 'dev',
       autoDeploy: true,

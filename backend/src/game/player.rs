@@ -3,7 +3,7 @@ use anyhow::Error;
 use serde::{Deserialize, Serialize};
 use crate::db_utils::{Connection, Key};
 use crate::game::{Card, Game, GameId};
-use crate::message::WebsocketResponse;
+use crate::requests::WebsocketResponse;
 use crate::Services;
 
 pub type PlayerId = String;

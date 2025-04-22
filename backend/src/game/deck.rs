@@ -1,14 +1,9 @@
-use crate::db_utils::Key;
-use crate::game::GameId;
-use crate::message::{DeckOptions, DeckType, WebsocketResponse};
-use crate::message::WebsocketResponse::DeckState;
-use anyhow::{anyhow, Error};
+use crate::requests::{DeckType};
 use rand::rng;
 use rand::seq::SliceRandom;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display, Formatter};
-use std::ops::Sub;
 use strum::Display;
 use uuid::Uuid;
 
@@ -142,75 +137,62 @@ impl Display for Card {
     }
 }
 
-/// Format {game_id}:{deck_id}
-pub type DeckId = String;
+pub type StackId = String;
 
-#[derive(Debug, Default, Serialize, Deserialize)]
-pub struct Deck {
-    pub(crate) id: DeckId,
-    pub(super) cards: Vec<Card>,
-    pub(super) visible_card_indexes: Vec<usize>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(default)]
-    pub(super) capacity: Option<u32>,
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Stack {
+    // todo uuid for now but can probably be int u8
+    pub id: StackId,
+    pub cards: Vec<Card>,
+    pub position: (i8, i8),
 }
 
-impl Key for Deck {
-    type Key = DeckId;
-    type Value = Self;
-
-    fn prefix() -> &'static str {
-        "game:deck"
-    }
-}
-
-impl Deck {
-    pub(super) fn from_options(deck_options: &DeckOptions, game_id: &GameId) -> Self {
-        let mut cards = match &deck_options.deck_type {
+impl Stack {
+    pub(super) fn from(deck_type: DeckType) -> Vec<Self> {
+        match deck_type {
             DeckType::Standard => {
                 let mut cards: Vec<_> = (1..=52).map(Card::from_u8).collect();
+                // Turn every card face down
+                for card in &mut cards {
+                    card.0 |= 0b0100_0000;
+                }
                 cards.shuffle(&mut rng());
-                cards
+
+                vec![Self {
+                    id: Uuid::new_v4().to_string(),
+                    cards,
+                    position: (0, 0),
+                }]
             }
-            DeckType::Custom(custom_deck) => custom_deck.clone(),
-        };
-
-        if deck_options.face_down {
-            for card in &mut cards {
-                card.0 |= 0b0100_0000;
+            DeckType::Custom(custom_deck) => {
+                custom_deck.into_iter().map(|cards| {
+                    Self {
+                        id: Uuid::new_v4().to_string(),
+                        cards,
+                        position: (0, 0),
+                    }
+                }).collect()
             }
         }
-
-        let visible_card_indexes = vec![cards.len().saturating_sub(1)];
-
-        Self {
-            id: format!("{game_id}:{}", Uuid::new_v4().to_string()),
-            cards,
-            visible_card_indexes,
-            capacity: deck_options.capacity,
-        }
     }
 
-    /// Can only be called for decks which have no cards visible or only top / bottom card visible
-    pub(super) fn shuffle(&mut self) -> Result<(), Error> {
-        if !self.visible_card_indexes.is_empty()
-            && *self.visible_card_indexes.first().unwrap() != 0usize
-            && *self.visible_card_indexes.first().unwrap() != self.cards.len().sub(1)
-        {
-            Err(anyhow!("can only call shuffle on decks with no visible cards"))
-        } else {
-            self.cards.shuffle(&mut rng());
-            Ok(())
-        }
-    }
+    pub(super) fn state(&self) -> StackState {
+        let top_card = self.cards.last().cloned().unwrap();
+        let top_card = if top_card.is_face_down() { Card::HIDDEN_CARD } else { top_card };
 
-    pub(super) fn state(&self) -> WebsocketResponse {
-        DeckState {
-            deck_id: self.id.clone(),
-            visible_cards: self.visible_card_indexes.iter().cloned().map(|i| {
-                let card = self.cards[i];
-                (i, if card.is_face_down() { Card::HIDDEN_CARD } else { card })
-            }).collect()
+        StackState {
+            //todo do i need to clone here
+            stack_id: self.id.clone(),
+            position: self.position.clone(),
+            visible_card: top_card,
         }
     }
+}
+
+#[derive(Debug, Serialize, PartialEq, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct StackState {
+    pub stack_id: StackId,
+    pub position: (i8, i8),
+    pub visible_card: Card,
 }
