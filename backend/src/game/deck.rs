@@ -59,13 +59,13 @@ impl SpecialCard {
     const MAX: u8 = SpecialCard::JokerRed as u8;
 
     fn from_u8(val: u8) -> Self {
-        debug_assert!(val & 0b0111_1111 <= Self::MAX, "Invalid suit: {}", val);
-        unsafe { std::mem::transmute(val & 0b0111_1111) }
+        debug_assert!(val & 0b0011_1111 <= Self::MAX, "Invalid suit: {}", val);
+        unsafe { std::mem::transmute(val & 0b0011_1111) }
     }
 }
 
-/// If bit 7 is set, represents a special card
-/// If bit 6 is set, represents a face down card
+/// If bit 7 is set, represents a face down card
+/// If bit 6 is set, represents a special card
 /// If special card, bits 0-5 represent the special card type
 /// If ordinary card, bits 2-5 represent the rank, and 0-1 represent the suit
 /// (0 - Space, 1 - Heart, 2 - Diamond, 3 - Club)
@@ -76,20 +76,20 @@ pub struct Card(u8);
 impl Card {
     /// Hidden card sent to clients
     /// Cards that are turned over in the deck will have bot 6 set, so the value is still accessible
-    pub const HIDDEN_CARD: Card = Self(0b0100_0000);
+    pub const HIDDEN_CARD: Card = Self(0b1000_0000);
 
     pub fn numerical(rank: Rank, suit: Suit) -> Self {
         Self(((rank as u8) << 2) | (suit as u8))
     }
 
     pub fn special(kind: SpecialCard) -> Self {
-        Self(0b1000_0000 | (kind as u8))
+        Self(0b0100_0000 | (kind as u8))
     }
 
     fn from_u8(val: u8) -> Self {
         debug_assert!(
-            val & 0b1011_000 <= 52
-                || (val & 0b1000_0000 != 0 && val & 0b0011_1111 <= SpecialCard::MAX),
+            val & 0b0111_1111 <= 52
+                || (val & 0b0100_0000 != 0 && val & 0b0011_1111 <= SpecialCard::MAX),
             "Invalid card byte: {}",
             val
         );
@@ -97,15 +97,15 @@ impl Card {
     }
 
     pub fn is_face_down(&self) -> bool {
-        self.0 & 0b0100_0000 != 0
-    }
-
-    pub fn is_special(&self) -> bool {
         self.0 & 0b1000_0000 != 0
     }
 
+    pub fn is_special(&self) -> bool {
+        self.0 & 0b0100_0000 != 0
+    }
+
     pub fn is_numerical(&self) -> bool {
-        self.0 & 0b1000_0000 == 0
+        self.0 & 0b0100_0000 == 0
     }
 
     pub fn kind(&self) -> Option<SpecialCard> {
@@ -121,7 +121,7 @@ impl Card {
     }
     
     pub fn flip(&mut self) {
-        self.0 ^= 0b0100_0000
+        self.0 ^= 0b1000_0000
     }
 }
 
@@ -154,7 +154,7 @@ impl Stack {
                 let mut cards: Vec<_> = (1..=52).map(Card::from_u8).collect();
                 // Turn every card face down
                 for card in &mut cards {
-                    card.0 |= 0b0100_0000;
+                    card.0 |= 0b1000_0000;
                 }
                 cards.shuffle(&mut rng());
 
