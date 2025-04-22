@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 use anyhow::Error;
 use serde::{Deserialize, Serialize};
-use crate::db_utils::{Connection, Key};
+use crate::db_utils::{Key};
 use crate::game::{Card, Game, GameId};
 use crate::requests::WebsocketResponse;
 use crate::Services;
@@ -56,15 +56,7 @@ impl Player {
     }
 
     /// Sends the current player state to the player
-    pub async fn send_state(&self, services: &Services, conn_id: Option<&str>) -> Result<(), Error> {
-        // todo check player game is this current one
-        // todo handle this error gracefully
-        let conn_id= if let Some(conn_id) = conn_id {
-            conn_id
-        } else {
-            &*services.get::<Connection>(&self.player_id).await.expect("connection not found")
-        };
-
+    pub async fn send_state(&self, services: &Services, conn_id: &str) -> Result<(), Error> {
         services.send(conn_id, &self.state()).await
     }
 }

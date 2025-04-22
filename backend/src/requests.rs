@@ -12,9 +12,16 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all_fields = "camelCase")]
 pub enum WebsocketRequest {
     JoinGame,
-    DrawCardToHand { stack: StackId },
+    TakeCard { stack: StackId },
+    PutCard { hand_index: usize, position: (i8, i8)},
     FlipCard { stack: StackId },
+    FlipStack { stack: StackId },
+    MoveCard { stack: StackId, position: (i8, i8) },
     MoveStack { stack: StackId, position: (i8, i8) },
+    Shuffle { stack: StackId },
+    Deal { stack: StackId },
+    GivePlayer { hand_index: usize, trade_to: PlayerId},
+    Reset,
     LeaveGame,
     Ping,
 }
@@ -40,7 +47,7 @@ pub struct JoinGameResponse {
     pub token: String,
 }
 
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 #[serde(rename_all_fields = "camelCase")]
 pub enum DeckType {

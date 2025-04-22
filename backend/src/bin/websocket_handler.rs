@@ -1,14 +1,14 @@
+use lambda_http::http::StatusCode;
 use lambda_http::{
     request::RequestContext, run, service_fn, tracing, Body, Error, IntoResponse, Request,
     RequestExt, Response,
 };
-use lambda_http::http::StatusCode;
 use multiplayer_cards::db_utils::Connection;
 use multiplayer_cards::game::{Game, GameId, PlayerId};
-use multiplayer_cards::requests::WebsocketResponse::{CloseGame, NoResponse, Success};
+use multiplayer_cards::requests::WebsocketResponse::{CloseGame, Success};
 use multiplayer_cards::requests::{WebsocketRequest, WebsocketResponse};
-use multiplayer_cards::{Services, WebsocketError};
 use multiplayer_cards::utils::AuthorizerUtils;
+use multiplayer_cards::{Services, WebsocketError};
 
 async fn websocket_handler(event: Request, services: &Services) -> Result<Response<Body>, Error> {
     let RequestContext::WebSocket(context) = event.request_context() else {
@@ -27,9 +27,9 @@ async fn websocket_handler(event: Request, services: &Services) -> Result<Respon
                 // It's okay if this is unsuccessful, the other connection will hang as there is no reference to its connection id
                 let _ = services.delete_connection(&old_connection).await;
             }
-            
+
             if services.get::<Game>(&game_id).await.is_none() {
-                return Ok((StatusCode::GONE, "game closed").into_response().await)
+                return Ok((StatusCode::GONE, "game closed").into_response().await);
             };
 
             services.put::<Connection>(&uuid, conn_id).await?;
@@ -43,13 +43,14 @@ async fn websocket_handler(event: Request, services: &Services) -> Result<Respon
         }
         "$default" => {
             let response = match WebsocketRequest::try_from(event) {
-                Ok(message) => handle_message(services, message, uuid, game_id, conn_id)
-                    .await
-                    .unwrap_or_else(|e| WebsocketError::ServiceError(e.to_string()).into()),
-                Err(error) => error.into(),
+                Ok(message) => {
+                    handle_message(services, message, uuid, game_id, conn_id).await
+                },
+                Err(error) => Err(error),
             };
-            if response != NoResponse {
-                services.send(conn_id, &response).await?;
+            
+            if let Err(e) = response {
+                services.send(conn_id, &e).await?;
             }
         }
         _ => return Err("unhandled message".into()),
@@ -64,39 +65,60 @@ async fn handle_message(
     uuid: PlayerId,
     game_id: GameId,
     conn_id: &str,
-) -> Result<WebsocketResponse, Error> {
+) -> Result<(), WebsocketError> {
     // todo fix possible race conditions when pulling from db
     let Some(mut game) = services.get::<Game>(&game_id).await else {
         services.send(conn_id, &CloseGame).await?;
         services.delete_connection(conn_id).await?;
-        return Ok(NoResponse)
+        return Ok(());
     };
-    
-    // join game -> only player showing in game -> join again, item not in db to delete?
 
-    Ok(match message {
+    // join game -> only player showing in game -> join again, item not in db to delete?
+    // todo refactor
+    match message {
+        WebsocketRequest::Ping => services.send(conn_id, &WebsocketResponse::Pong).await?,
         WebsocketRequest::JoinGame => {
             if game.connected_players.contains_key(&uuid) {
-                return Ok(WebsocketError::AlreadyInGame.into())
+                return Err(WebsocketError::AlreadyInGame);
             }
-            
+
             game.add_player(services, uuid, conn_id).await?;
-            Success
         }
-        WebsocketRequest::DrawCardToHand { stack } => todo!(),
+        
+        // IN GAME ONLY ACTIONS
+        _ if !game.connected_players.contains_key(&uuid) => {
+            return Err(WebsocketError::NotInGame)
+        }
         WebsocketRequest::LeaveGame => {
-            if !game.connected_players.contains_key(&uuid) {
-                return Ok(WebsocketError::NotInGame.into())
-            }
             game.remove_player(services, uuid).await?;
             services.send(conn_id, &Success).await?;
             services.delete_connection(conn_id).await?;
-            NoResponse
         }
-        WebsocketRequest::FlipCard { stack } => todo!(),
-        WebsocketRequest::MoveStack { stack, position } => todo!(),
-        WebsocketRequest::Ping => WebsocketResponse::Pong,
-    })
+        WebsocketRequest::TakeCard { stack } => {
+            game.take_card(services, stack, &uuid, conn_id).await?
+        }
+        WebsocketRequest::PutCard { hand_index, position} => {
+            game.put_card(services, &uuid, hand_index, position, conn_id).await?
+        }
+        WebsocketRequest::FlipCard { stack } => game.flip_card(services, stack).await?,
+        WebsocketRequest::MoveStack { stack, position } => {
+            game.move_stack(services, stack, position).await?
+        }
+        WebsocketRequest::FlipStack { stack } => game.flip_stack(services, stack).await?,
+        WebsocketRequest::MoveCard { stack, position } => {
+            game.move_card(services, stack, position).await?
+        }
+        WebsocketRequest::Shuffle { stack } => game.shuffle_stack(services, stack).await?,
+        WebsocketRequest::Deal { .. } | WebsocketRequest::GivePlayer { .. } => todo!(),
+        // OWNER ONLY ACTIONS
+        _ if game.owner != uuid => {
+            return Err(WebsocketError::NoPermission)
+        }
+        WebsocketRequest::Reset => {
+            game.reset(services).await?
+        }
+    };
+    Ok(())
 }
 
 #[tokio::main]

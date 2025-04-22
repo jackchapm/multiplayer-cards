@@ -96,32 +96,36 @@ impl Card {
         Card(val)
     }
 
-    pub fn is_face_down(self) -> bool {
+    pub fn is_face_down(&self) -> bool {
         self.0 & 0b0100_0000 != 0
     }
 
-    pub fn is_special(self) -> bool {
+    pub fn is_special(&self) -> bool {
         self.0 & 0b1000_0000 != 0
     }
 
-    pub fn is_numerical(self) -> bool {
+    pub fn is_numerical(&self) -> bool {
         self.0 & 0b1000_0000 == 0
     }
 
-    pub fn kind(self) -> Option<SpecialCard> {
+    pub fn kind(&self) -> Option<SpecialCard> {
         self.is_special().then(|| SpecialCard::from_u8(self.0))
     }
 
-    pub fn rank(self) -> Option<Rank> {
+    pub fn rank(&self) -> Option<Rank> {
         self.is_numerical().then(|| Rank::from_u8(self.0))
     }
 
-    pub fn suit(self) -> Option<Suit> {
+    pub fn suit(&self) -> Option<Suit> {
         self.is_numerical().then(|| Suit::from_u8(self.0))
     }
 
-    pub fn as_face_down(self) -> Card {
+    pub fn as_face_down(&self) -> Card {
         Card(self.0 | 0b0100_0000)
+    }
+    
+    pub fn flip(mut self) {
+        self.0 |= 0b0100_0000
     }
 }
 
@@ -185,6 +189,7 @@ impl Stack {
             stack_id: self.id.clone(),
             position: self.position.clone(),
             visible_card: top_card,
+            remaining_cards: self.cards.len(),
         }
     }
 }
@@ -195,4 +200,5 @@ pub struct StackState {
     pub stack_id: StackId,
     pub position: (i8, i8),
     pub visible_card: Card,
+    pub remaining_cards: usize,
 }

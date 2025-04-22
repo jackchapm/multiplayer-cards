@@ -3,7 +3,7 @@ use anyhow::Error;
 use serde::{Serialize};
 use strum::IntoStaticStr;
 use thiserror::Error;
-use crate::game::GameId;
+use crate::game::{GameId, PlayerId, StackId};
 
 pub mod db_utils;
 pub mod requests;
@@ -24,8 +24,20 @@ pub enum WebsocketError {
     #[error("you cannot do this whilst already in game")]
     AlreadyInGame,
 
-    #[error("can't shuffle deck whilst cards are in play")]
-    DeckInPlay,
+    #[error("only the game owner can perform this action")]
+    NoPermission,
+
+    #[error("the stack does not exist")]
+    StackNotFound,
+
+    #[error("attempted operation on empty stack")]
+    EmptyStack,
+
+    #[error("attempted operation on card in player's hand which doesn't exist")]
+    CardNotFound,
+
+    #[error("the player does not exist")]
+    PlayerNotFound,
 
     #[error("{0}")]
     InvalidRequest(&'static str),
@@ -33,6 +45,12 @@ pub enum WebsocketError {
     #[error("Internal server error: {0}")]
     // todo stack trace should not be sent to client
     ServiceError(String)
+}
+
+impl From<Error> for WebsocketError {
+    fn from(value: Error) -> Self {
+        WebsocketError::ServiceError(value.to_string())
+    }
 }
 
 pub struct Services {

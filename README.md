@@ -9,9 +9,11 @@ think of to implement. Not every feature is guaranteed to be implemented.
 **Planned Features:**
 - [ ] MVP (deck of cards that can be interacted with, with player hands)
 - [ ] (frontend): Highlight face up cards in players hand
+- [ ] (frontend): Tutorial on how to manipulate cards
 - [ ] (backend): Move game store to in memory database (upstash) - can pop from list directly
 - [ ] (backend): Replace json encoding with protobuf for efficiency
 - [ ] (backend): Unit / integration testing
+- [ ] Reclaim disconnected player's cards
 - [ ] Enforced player turns
 - [ ] Multiple shared deck support (e.g multiple stacks)
 - [ ] Local only games, or locally discoverable tables
