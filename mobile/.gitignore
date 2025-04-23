@@ -1,0 +1,12 @@
+/.gradle
+/.kotlin
+/modules
+/bundles
+/deps
+/.run
+/build
+*.hprof
+*.log
+korge.keystore
+local.properties
+src/main/*
