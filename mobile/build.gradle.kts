@@ -9,7 +9,7 @@ korge {
 	name = "Multiplayer Cards"
     preferredIphoneSimulatorVersion = 16
 	targetIos()
-	targetAndroid()
+//	targetAndroid()
 
 	serializationJson()
 }

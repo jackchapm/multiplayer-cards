@@ -1,10 +1,11 @@
-/.gradle
-/.kotlin
+.gradle/
+.kotlin/
 /modules
 /bundles
 /deps
 /.run
 /build
+buildSrc/build/
 *.hprof
 *.log
 korge.keystore
