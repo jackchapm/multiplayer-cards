@@ -1,0 +1,34 @@
+[gd_scene load_steps=2 format=3 uid="uid://bw0as3flfrbs"]
+
+[ext_resource type="PackedScene" uid="uid://d1mtsqpgbtv5i" path="res://game/scene/card/card.tscn" id="1_eddn2"]
+
+[node name="TableScene" type="Node2D"]
+
+[node name="ColorRect" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -72.0
+offset_top = -63.0
+offset_right = 1258.0
+offset_bottom = 2090.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
+color = Color(0.207843, 0.396078, 0.301961, 1)
+
+[node name="Card" parent="." instance=ExtResource("1_eddn2")]
+position = Vector2(24, 21)
+card_value = 10
+
+[node name="Card2" parent="." instance=ExtResource("1_eddn2")]
+position = Vector2(398, 465)
+card_value = 26
+
+[node name="Card3" parent="." instance=ExtResource("1_eddn2")]
+position = Vector2(74, 556)
+card_value = 43
+
+[node name="Card4" parent="." instance=ExtResource("1_eddn2")]
+position = Vector2(509, 15)
+card_value = 11

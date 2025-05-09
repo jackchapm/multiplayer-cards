@@ -1,0 +1,51 @@
+[gd_scene load_steps=3 format=3 uid="uid://lag75m0l5657"]
+
+[ext_resource type="Theme" uid="uid://d136n6qihpec6" path="res://game/scene/main_menu.tres" id="1_yi5k7"]
+[ext_resource type="Script" uid="uid://cy0cifsnv3vqp" path="res://gdj/scene/ButtonContainer.gdj" id="2_ro53x"]
+
+[node name="MainMenu" type="Control"]
+texture_filter = 2
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("1_yi5k7")
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="PanelContainer" type="PanelContainer" parent="MarginContainer"]
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 0
+theme = ExtResource("1_yi5k7")
+
+[node name="MarginContainer" type="MarginContainer" parent="MarginContainer/PanelContainer"]
+layout_mode = 2
+theme_override_constants/margin_left = 150
+theme_override_constants/margin_top = 48
+theme_override_constants/margin_right = 150
+theme_override_constants/margin_bottom = 48
+
+[node name="ButtonContainer" type="VBoxContainer" parent="MarginContainer/PanelContainer/MarginContainer"]
+layout_mode = 2
+script = ExtResource("2_ro53x")
+
+[node name="NewButton" type="Button" parent="MarginContainer/PanelContainer/MarginContainer/ButtonContainer"]
+layout_mode = 2
+text = "Create game"
+
+[node name="JoinButton" type="Button" parent="MarginContainer/PanelContainer/MarginContainer/ButtonContainer"]
+layout_mode = 2
+text = "Join game"
+
+[node name="SettingsButton" type="Button" parent="MarginContainer/PanelContainer/MarginContainer/ButtonContainer"]
+layout_mode = 2
+text = "Settings"

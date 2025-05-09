@@ -10,11 +10,16 @@ kotlin {
     jvmToolchain(23)
 }
 
+kotlin.sourceSets.main {
+    kotlin.srcDirs("game")
+}
+
 godot {
     // START: registration options
     // regular setup
     // the script registration which you'll attach to nodes are generated into this directory
     registrationFileBaseDir.set(projectDir.resolve("gdj").also { it.mkdirs() })
+    isGodotCoroutinesEnabled.set(true)
 
     // defines whether the script registration files should be generated hierarchically according to the classes package path or flattened into `registrationFileBaseDir`
     //isRegistrationFileHierarchyEnabled.set(true)
