@@ -43,8 +43,8 @@ pub enum SpecialCard {
 
 impl Rank {
     fn from_u8(val: u8) -> Self {
-        debug_assert!(val >> 2 <= 12, "Invalid rank: {}", val);
-        unsafe { std::mem::transmute(val >> 2) }
+        debug_assert!(val & 0b111100 <= 13, "Invalid rank: {}", val);
+        unsafe { std::mem::transmute(val & 0b111100) }
     }
 }
 
@@ -68,7 +68,7 @@ impl SpecialCard {
 /// If bit 6 is set, represents a special card
 /// If special card, bits 0-5 represent the special card type
 /// If ordinary card, bits 2-5 represent the rank, and 0-1 represent the suit
-/// (0 - Space, 1 - Heart, 2 - Diamond, 3 - Club)
+/// (0 - Spade, 1 - Heart, 2 - Diamond, 3 - Club)
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Card(u8);
@@ -151,7 +151,7 @@ impl Stack {
     pub(super) fn from(deck_type: DeckType) -> Vec<Self> {
         match deck_type {
             DeckType::Standard => {
-                let mut cards: Vec<_> = (1..=52).map(Card::from_u8).collect();
+                let mut cards: Vec<_> = (4..=55).map(Card::from_u8).collect();
                 // Turn every card face down
                 for card in &mut cards {
                     card.0 |= 0b1000_0000;
@@ -165,6 +165,7 @@ impl Stack {
                 }]
             }
             DeckType::Custom(custom_deck) => {
+                // todo Check card validity
                 custom_deck.into_iter().map(|cards| {
                     Self {
                         id: Uuid::new_v4().to_string(),
@@ -177,8 +178,10 @@ impl Stack {
     }
 
     pub(super) fn state(&self) -> StackState {
-        let top_card = self.cards.last().cloned().unwrap();
-        let top_card = if top_card.is_face_down() { Card::HIDDEN_CARD } else { top_card };
+        let top_card = match self.cards.last().cloned() {
+            Some(card) if card.is_face_down() => card,
+            _ => Card::HIDDEN_CARD
+        };
 
         StackState {
             //todo do i need to clone here

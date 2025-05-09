@@ -5,8 +5,13 @@ use aws_sdk_apigatewaymanagement::primitives::Blob;
 use lambda_http::{Request, RequestPayloadExt};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_with::skip_serializing_none;
+use strum::EnumDiscriminants;
+use crate::requests::WebsocketResponse::GameState;
 
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, EnumDiscriminants, Deserialize, JsonSchema)]
+#[strum_discriminants(derive(Serialize, JsonSchema))]
+#[strum_discriminants(serde(rename_all = "kebab-case"))]
 #[serde(tag = "action")]
 #[serde(rename_all = "kebab-case")]
 #[serde(rename_all_fields = "camelCase")]
@@ -70,6 +75,16 @@ impl TryFrom<Request> for WebsocketRequest {
     }
 }
 
+#[derive(Debug, Default, Serialize, PartialEq, JsonSchema)]
+#[skip_serializing_none]
+pub struct GameStateData {
+    pub cause_action: Option<WebsocketRequestDiscriminants>,
+    pub cause_player: Option<PlayerId>,
+    pub owner: Option<PlayerId>,
+    pub players: Option<Vec<PlayerId>>,
+    pub stacks: Option<Vec<StackState>>,
+}
+
 // todo only send update not whole state
 #[derive(Debug, Serialize, PartialEq, JsonSchema)]
 #[serde(tag = "type")]
@@ -78,9 +93,8 @@ impl TryFrom<Request> for WebsocketRequest {
 pub enum WebsocketResponse {
     GameState {
         game_id: GameId,
-        owner: PlayerId,
-        connected_players: Vec<PlayerId>,
-        stacks: Vec<StackState>,
+        #[serde(flatten)]
+        data: GameStateData
     },
     PlayerState {
         game_id: GameId,
@@ -94,6 +108,15 @@ pub enum WebsocketResponse {
     Success,
     NoResponse,
     Pong,
+}
+
+impl GameStateData {
+    pub fn with(self, game_id: &GameId) -> WebsocketResponse {
+        GameState {
+            game_id: game_id.clone(),
+            data: self,
+        }
+    }
 }
 
 impl From<WebsocketError> for WebsocketResponse {

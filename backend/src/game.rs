@@ -1,7 +1,7 @@
 use std::collections::HashMap;
+use std::iter;
 use crate::db_utils::{Key};
-use crate::requests::{DeckType, WebsocketResponse};
-use crate::requests::WebsocketResponse::GameState;
+use crate::requests::{DeckType, GameStateData, WebsocketResponse};
 use crate::{Services, WebsocketError};
 use anyhow::{anyhow, Error};
 use serde::{Deserialize, Serialize};
@@ -16,6 +16,7 @@ mod player;
 
 pub use deck::*;
 pub use player::*;
+use crate::requests::WebsocketRequestDiscriminants::{FlipCard, FlipStack, JoinGame, LeaveGame, MoveStack, Ping, PutCard, Reset, Shuffle, TakeCard};
 
 pub type GameId = String;
 
@@ -76,11 +77,23 @@ impl Game {
     ) -> Result<Player, Error> {
         let player = match services.get::<Player>(&player_id).await {
             Some(player) => player,
-            None => Player::new(services, player_id.clone(), self.id.clone()).await?,
+            None => Player::new(services, player_id, self.id.clone()).await?,
         };
-        self.connected_players.insert(player_id.clone(), conn_id.to_string());
+        self.connected_players.insert(player.player_id.clone(), conn_id.to_string());
         services.put::<Game>(&self.id, &self).await?;
-        self.send_state_all(services, &self.state()).await?;
+        services.send(conn_id, &GameStateData {
+            cause_action: Some(Ping),
+            // could send current player but won't provide any extra detail and involves another clone
+            cause_player: None,
+            owner: Some(self.owner.clone()),
+            players: Some(self.connected_players.keys().cloned().collect()),
+            stacks: Some(self.stacks.iter().map(Stack::state).collect())
+        }.with(&self.id)).await?;
+        self.send_state_all(services, &GameStateData {
+            cause_action: Some(JoinGame),
+            cause_player: Some(player.player_id.clone()),
+            ..Default::default()
+        }.with(&self.id)).await?;
         player.send_state(services, conn_id).await?;
         Ok(player)
     }
@@ -117,7 +130,12 @@ impl Game {
         }
         // todo only send update, not full state
         services.put::<Game>(&self.id, &self).await?;
-        self.send_state_all(services, &self.state()).await?;
+        self.send_state_all(services, &GameStateData {
+            cause_action: Some(LeaveGame),
+            cause_player: Some(player_id),
+            owner: Some(self.owner.clone()),
+            ..Default::default()
+        }.with(&self.id)).await?;
         Ok(())
     }
 
@@ -141,17 +159,19 @@ impl Game {
             .ok_or_else(|| WebsocketError::StackNotFound)
     }
 
-    fn pop_from_stack(&mut self, stack_id: StackId) -> Result<Card, WebsocketError> {
+    /// Returns the popped card, as well as the remaining stack state
+    fn pop_from_stack(&mut self, stack_id: StackId) -> Result<(Card, StackState), WebsocketError> {
         let stack_index = self.stacks.iter().position(|s| s.id == stack_id)
             .ok_or(WebsocketError::StackNotFound)?;
 
         let stack = self.stacks.get_mut(stack_index).unwrap();
         let card = stack.cards.pop().ok_or(WebsocketError::EmptyStack)?;
+        let state = stack.state();
 
         if stack.cards.is_empty() {
             self.stacks.swap_remove(stack_index);
         }
-        Ok(card)
+        Ok((card, state))
     }
 
     async fn get_player(&self, services: &Services, player_id: &PlayerId) -> Result<Player, WebsocketError> {
@@ -160,8 +180,7 @@ impl Game {
             .ok_or_else(|| WebsocketError::PlayerNotFound)
     }
 
-    async fn save_and_send(&self, services: &Services) -> Result<(), Error> {
-        self.send_state_all(services, &self.state()).await?;
+    async fn save(&self, services: &Services) -> Result<(), Error> {
         services.put::<Game>(&self.id, self).await.map(|_| ())
     }
 
@@ -184,30 +203,55 @@ impl Game {
     }
 
     pub async fn flip_card(&mut self, services: &Services, stack_id: StackId) -> Result<(), WebsocketError> {
-        let stack = self.get_stack(stack_id)?;
+        let state = {
+            let stack = self.get_stack(stack_id)?;
         if stack.cards.is_empty() {
             // todo handle deleting this stack
             return Err(WebsocketError::EmptyStack)
         }
         stack.cards.last_mut().unwrap().flip();
-        self.save_and_send(services).await?;
+            stack.state()
+            };
+        self.save(services).await?;
+        self.send_state_all(services, &GameStateData {
+            cause_action: Some(FlipCard),
+            stacks: Some(vec![state]),
+            .. Default::default()
+        }.with(&self.id)).await?;
         Ok(())
     }
 
     pub async fn flip_stack(&mut self, services: &Services, stack_id: StackId) -> Result<(), WebsocketError> {
-        let stack = self.get_stack(stack_id)?;
-        stack.cards.reverse();
-        for card in &mut stack.cards {
-            card.flip();
-        }
-        self.save_and_send(services).await?;
+        let state = {
+            let stack = self.get_stack(stack_id)?;
+            stack.cards.reverse();
+            for card in &mut stack.cards {
+                card.flip();
+            }
+            stack.state()
+        };
+        self.save(services).await?;
+        self.send_state_all(services, &GameStateData {
+            cause_action: Some(FlipStack),
+            stacks: Some(vec![state]),
+            ..Default::default()
+        }.with(&self.id)).await?;
         Ok(())
     }
 
     pub async fn shuffle_stack(&mut self, services: &Services, stack_id: StackId) -> Result<(), WebsocketError> {
-        let stack = self.get_stack(stack_id)?;
-        stack.cards.shuffle(&mut rng());
-        self.save_and_send(services).await?;
+        let state = {
+            let stack = self.get_stack(stack_id)?;
+            stack.cards.shuffle(&mut rng());
+            stack.state()
+        };
+
+        self.save(services).await?;
+        self.send_state_all(services, &GameStateData {
+            cause_action: Some(Shuffle),
+            stacks: Some(vec![state]),
+            ..Default::default()
+        }.with(&self.id)).await?;
         Ok(())
     }
 
@@ -215,39 +259,61 @@ impl Game {
         let stack_index = self.stacks.iter().position(|s| s.id == stack_id)
             .ok_or(WebsocketError::StackNotFound)?;
 
-        let mut stack = self.stacks.swap_remove(stack_index);
-        if let Some(target_stack) = self.stack_at_position(position, false) {
-            target_stack.cards.extend(stack.cards.drain(..));
-        } else {
-            stack.position = position;
-            self.stacks.push(stack);
-        }
+        let (old_stack_state, new_stack_state) = {
+            let mut mut_stack = self.stacks.swap_remove(stack_index);
+            if let Some(target_stack) = self.stack_at_position(position, false) {
+                target_stack.cards.extend(mut_stack.cards.drain(..));
+                (Some(mut_stack.state()), target_stack.state())
+            } else {
+                mut_stack.position = position;
+                let state = mut_stack.state();
+                self.stacks.push(mut_stack);
+                (None, state)
+            }
+        };
 
-        self.save_and_send(services).await?;
+        self.save(services).await?;
+        self.send_state_all(services, &GameStateData {
+            cause_action: Some(MoveStack),
+            stacks: Some(iter::once(new_stack_state).chain(old_stack_state.into_iter()).collect()),
+            ..Default::default()
+        }.with(&self.id)).await?;
         Ok(())
     }
 
     pub async fn move_card(&mut self, services: &Services, stack_id: StackId, position: (i8, i8)) -> Result<(), WebsocketError> {
-        let card = self.pop_from_stack(stack_id)?;
-        let target_stack = self.stack_at_position(position, true).unwrap();
-        target_stack.cards.push(card);
+        let (old_stack_state, new_stack_state) = {
+            let (card, old_stack_state) = self.pop_from_stack(stack_id)?;
+            let target_stack = self.stack_at_position(position, true).unwrap();
+            target_stack.cards.push(card);
+            (target_stack.state(), old_stack_state)
+        };
 
-        self.save_and_send(services).await?;
+        self.save(services).await?;
+        self.send_state_all(services, &GameStateData {
+            cause_action: Some(MoveStack),
+            stacks: Some(vec![old_stack_state, new_stack_state]),
+            ..Default::default()
+        }.with(&self.id)).await?;
         Ok(())
     }
 
     pub async fn take_card(&mut self, services: &Services, stack_id: StackId, player_id: &PlayerId, conn_id: &str) -> Result<(), WebsocketError> {
         let mut player = self.get_player(services, player_id).await?;
-        let card = self.pop_from_stack(stack_id)?;
-
+        let (card, stack_state) = self.pop_from_stack(stack_id)?;
         player.hand.push(card);
-        self.save_and_send(services).await?;
+        self.save(services).await?;
+        self.send_state_all(services, &GameStateData {
+            cause_action: Some(TakeCard),
+            cause_player: Some(player_id.clone()),
+            stacks: Some(vec![stack_state]),
+            ..Default::default()
+        }.with(&self.id)).await?;
         player.send_state(services, conn_id).await?;
         services.put::<Player>(&player.player_id, &player).await?;
         Ok(())
     }
 
-    // todo determine whether face up or down
     pub async fn put_card(
         &mut self,
         services: &Services,
@@ -262,15 +328,25 @@ impl Game {
             return Err(WebsocketError::CardNotFound)
         }
 
-        let target_stack = self.stack_at_position(position, true).unwrap();
-        let mut card = player.hand.swap_remove(hand_index);
-        if face_down != card.is_face_down() {
-            card.flip()
-        } 
-        target_stack.cards.push(card);
+        let state = {
+            let target_stack = self.stack_at_position(position, true).unwrap();
+            let mut card = player.hand.swap_remove(hand_index);
+            if face_down != card.is_face_down() {
+                card.flip()
+            }
+            target_stack.cards.push(card);
+            target_stack.state()
+        };
+
         player.send_state(services, conn_id).await?;
         services.put::<Player>(&player.player_id, &player).await?;
-        self.save_and_send(services).await?;
+        self.save(services).await?;
+        self.send_state_all(services, &GameStateData{
+            cause_action: Some(PutCard),
+            cause_player: Some(player_id.clone()),
+            stacks: Some(vec![state]),
+            ..Default::default()
+        }.with(&self.id)).await?;
         Ok(())
     }
 
@@ -286,24 +362,13 @@ impl Game {
             }
         }
         self.stacks = Stack::from(self.deck_type.clone());
-        self.save_and_send(services).await?;
-
+        self.save(services).await?;
+        self.send_state_all(services, &GameStateData {
+            cause_action: Some(Reset),
+            stacks: Some(self.stacks.iter().map(Stack::state).collect()),
+            ..Default::default()
+        }.with(&self.id)).await?;
         Ok(())
-    }
-
-    /// Generates the game state to be sent to players
-    fn state(&self) -> WebsocketResponse {
-        GameState {
-            owner: self.owner.clone(),
-            game_id: self.id.clone(),
-            // todo check performance on this call
-            connected_players: self.connected_players.keys().cloned().collect(),
-            stacks: self.stacks.iter().map(Stack::state).collect()
-        }
-    }
-
-    pub async fn send_state(&self, services: &Services, conn_id: &str) -> Result<(), Error> {
-        services.send(conn_id, &self.state()).await
     }
 
     /// Send a websocket response to all players connected to the game
