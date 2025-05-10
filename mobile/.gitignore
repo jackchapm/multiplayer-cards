@@ -6,6 +6,7 @@ reports/
 .idea
 build
 jvm
+/ios/
 
 graal_isolate.h
 graal_isolate_dynamic.h

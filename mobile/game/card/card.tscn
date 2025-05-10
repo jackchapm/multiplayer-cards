@@ -1,20 +1,16 @@
 [gd_scene load_steps=4 format=3 uid="uid://d1mtsqpgbtv5i"]
 
-[ext_resource type="Texture2D" uid="uid://cb3f10xlrd8ol" path="res://game/scene/card/assets/back_frame.tres" id="1_kfvwu"]
+[ext_resource type="Texture2D" uid="uid://cb3f10xlrd8ol" path="res://game/card/assets/back_frame.tres" id="1_kfvwu"]
 [ext_resource type="Script" uid="uid://fe4rp8xk21ha" path="res://gdj/scene/card/Card.gdj" id="1_nfwaa"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_nfwaa"]
 size = Vector2(57, 79)
 
 [node name="Card" type="Area2D"]
-scale = Vector2(4, 4)
 script = ExtResource("1_nfwaa")
-card_value = 2
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
 texture = ExtResource("1_kfvwu")
-centered = false
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-position = Vector2(28.5, 39.5)
 shape = SubResource("RectangleShape2D_nfwaa")

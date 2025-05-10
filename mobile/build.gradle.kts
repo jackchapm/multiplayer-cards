@@ -57,10 +57,10 @@ godot {
     // START: graal native image export options
     // NOTE: this is an advanced feature! Read: https://godot-kotl.in/en/stable/user-guide/advanced/graal-vm-native-image/
     // IMPORTANT: Graal Native Image needs to be considered from the start of development!
-    isGraalNativeImageExportEnabled.set(true)
+    isGraalNativeImageExportEnabled.set(false)
     graalVmDirectory.set(File("${System.getenv("GRAALVM_HOME")}"))
     windowsDeveloperVCVarsPath.set(File("${System.getenv("VC_VARS_PATH")}"))
-    isIOSExportEnabled.set(true)
+    isIOSExportEnabled.set(false)
     // END: graal native image export options
 
 }

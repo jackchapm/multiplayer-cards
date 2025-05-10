@@ -1,7 +1,7 @@
 [gd_resource type="SpriteFrames" load_steps=55 format=3 uid="uid://dkuoewsq8404f"]
 
-[ext_resource type="Texture2D" uid="uid://cc8r1n23376bj" path="res://game/scene/card/assets/card_sheet.png" id="1_gdvk1"]
-[ext_resource type="Texture2D" uid="uid://cb3f10xlrd8ol" path="res://game/scene/card/assets/back_frame.tres" id="1_shxnk"]
+[ext_resource type="Texture2D" uid="uid://cc8r1n23376bj" path="res://game/card/assets/card_sheet.png" id="1_gdvk1"]
+[ext_resource type="Texture2D" uid="uid://cb3f10xlrd8ol" path="res://game/card/assets/back_frame.tres" id="1_shxnk"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_o8om5"]
 atlas = ExtResource("1_gdvk1")

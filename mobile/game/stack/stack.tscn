@@ -1,0 +1,16 @@
+[gd_scene load_steps=3 format=3 uid="uid://g04iy421625v"]
+
+[ext_resource type="Script" uid="uid://d06vo547beor7" path="res://gdj/scene/card/Stack.gdj" id="1_7c0hu"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_likc6"]
+size = Vector2(57, 79)
+
+[node name="Stack" type="Area2D"]
+scale = Vector2(4, 4)
+script = ExtResource("1_7c0hu")
+stack_size = 5
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_likc6")
+
+[node name="Cards" type="Node2D" parent="."]
