@@ -144,7 +144,8 @@ pub struct Stack {
     // todo uuid for now but can probably be int u8
     pub id: StackId,
     pub cards: Vec<Card>,
-    pub position: (i8, i8),
+    // todo convert into type
+    pub position: (i16, i16),
 }
 
 impl Stack {
@@ -164,9 +165,9 @@ impl Stack {
                     position: (0, 0),
                 }]
             }
-            DeckType::Custom(custom_deck) => {
+            DeckType::Custom { stacks } => {
                 // todo Check card validity
-                custom_deck.into_iter().map(|cards| {
+                stacks.into_iter().map(|cards| {
                     Self {
                         id: Uuid::new_v4().to_string(),
                         cards,
@@ -179,7 +180,7 @@ impl Stack {
 
     pub(super) fn state(&self) -> StackState {
         let top_card = match self.cards.last().cloned() {
-            Some(card) if card.is_face_down() => card,
+            Some(card) if !card.is_face_down() => card,
             _ => Card::HIDDEN_CARD
         };
 
@@ -197,7 +198,7 @@ impl Stack {
 #[serde(rename_all = "camelCase")]
 pub struct StackState {
     pub stack_id: StackId,
-    pub position: (i8, i8),
+    pub position: (i16, i16),
     pub visible_card: Card,
     pub remaining_cards: usize,
 }

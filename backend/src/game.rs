@@ -184,7 +184,7 @@ impl Game {
         services.put::<Game>(&self.id, self).await.map(|_| ())
     }
 
-    fn stack_at_position(&mut self, position: (i8, i8), create_if_none: bool) -> Option<&mut Stack> {
+    fn stack_at_position(&mut self, position: (i16, i16), create_if_none: bool) -> Option<&mut Stack> {
         if let Some(index) = self.stacks.iter().position(|s| s.position == position) {
             return Some(&mut self.stacks[index]);
         }
@@ -255,7 +255,7 @@ impl Game {
         Ok(())
     }
 
-    pub async fn move_stack(&mut self, services: &Services, stack_id: StackId, position: (i8, i8)) -> Result<(), WebsocketError> {
+    pub async fn move_stack(&mut self, services: &Services, stack_id: StackId, position: (i16, i16)) -> Result<(), WebsocketError> {
         let stack_index = self.stacks.iter().position(|s| s.id == stack_id)
             .ok_or(WebsocketError::StackNotFound)?;
 
@@ -281,7 +281,7 @@ impl Game {
         Ok(())
     }
 
-    pub async fn move_card(&mut self, services: &Services, stack_id: StackId, position: (i8, i8)) -> Result<(), WebsocketError> {
+    pub async fn move_card(&mut self, services: &Services, stack_id: StackId, position: (i16, i16)) -> Result<(), WebsocketError> {
         let (old_stack_state, new_stack_state) = {
             let (card, old_stack_state) = self.pop_from_stack(stack_id)?;
             let target_stack = self.stack_at_position(position, true).unwrap();
@@ -319,7 +319,7 @@ impl Game {
         services: &Services,
         player_id: &PlayerId,
         hand_index: usize,
-        position: (i8, i8),
+        position: (i16, i16),
         face_down: bool,
         conn_id: &str
     ) -> Result<(), WebsocketError> {

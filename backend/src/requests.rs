@@ -12,17 +12,17 @@ use crate::requests::WebsocketResponse::GameState;
 #[derive(Debug, EnumDiscriminants, Deserialize, JsonSchema)]
 #[strum_discriminants(derive(Serialize, JsonSchema))]
 #[strum_discriminants(serde(rename_all = "kebab-case"))]
-#[serde(tag = "action")]
+#[serde(tag = "type")]
 #[serde(rename_all = "kebab-case")]
 #[serde(rename_all_fields = "camelCase")]
 pub enum WebsocketRequest {
     JoinGame,
     TakeCard { stack: StackId },
-    PutCard { hand_index: usize, position: (i8, i8), face_down: bool },
+    PutCard { hand_index: usize, position: (i16, i16), face_down: bool },
     FlipCard { stack: StackId },
     FlipStack { stack: StackId },
-    MoveCard { stack: StackId, position: (i8, i8) },
-    MoveStack { stack: StackId, position: (i8, i8) },
+    MoveCard { stack: StackId, position: (i16, i16) },
+    MoveStack { stack: StackId, position: (i16, i16) },
     Shuffle { stack: StackId },
     Deal { stack: StackId },
     GivePlayer { hand_index: usize, trade_to: PlayerId},
@@ -53,11 +53,12 @@ pub struct JoinGameResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(tag="type")]
 #[serde(rename_all = "kebab-case")]
 #[serde(rename_all_fields = "camelCase")]
 pub enum DeckType {
     Standard,
-    Custom(Vec<Vec<Card>>),
+    Custom { stacks: Vec<Vec<Card>> },
 }
 
 impl TryFrom<Request> for WebsocketRequest {
@@ -75,7 +76,9 @@ impl TryFrom<Request> for WebsocketRequest {
     }
 }
 
+// todo documentation for what each Stack is in stacks
 #[derive(Debug, Default, Serialize, PartialEq, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 #[skip_serializing_none]
 pub struct GameStateData {
     pub cause_action: Option<WebsocketRequestDiscriminants>,
