@@ -38,7 +38,7 @@ border_blend = true
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_74t7n"]
 content_margin_left = 100.0
-content_margin_top = 120.0
+content_margin_top = 100.0
 content_margin_right = 100.0
 content_margin_bottom = 100.0
 bg_color = Color(0.24, 0.24, 0.24, 0.501961)

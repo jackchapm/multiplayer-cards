@@ -1,38 +1,17 @@
-[gd_scene load_steps=3 format=3 uid="uid://bw0as3flfrbs"]
-
-[ext_resource type="PackedScene" uid="uid://g04iy421625v" path="res://game/stack/stack.tscn" id="1_eddn2"]
-[ext_resource type="PackedScene" uid="uid://d1mtsqpgbtv5i" path="res://game/card/card.tscn" id="2_likc6"]
+[gd_scene format=3 uid="uid://bw0as3flfrbs"]
 
 [node name="TableScene" type="Node2D"]
 
 [node name="ColorRect" type="ColorRect" parent="."]
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = -72.0
-offset_top = -63.0
-offset_right = 1258.0
-offset_bottom = 2090.0
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_right = 1080.0
+offset_bottom = 1920.0
 grow_horizontal = 2
 grow_vertical = 2
+scale = Vector2(3, 3)
 mouse_filter = 1
 color = Color(0.207843, 0.396078, 0.301961, 1)
-
-[node name="Stacks" type="Node2D" parent="."]
-
-[node name="Stack" parent="Stacks" instance=ExtResource("1_eddn2")]
-position = Vector2(478, 528)
-
-[node name="Card" parent="Stacks/Stack/Cards" index="0" instance=ExtResource("2_likc6")]
-card_value = 12
-
-[node name="Card2" parent="Stacks/Stack/Cards" index="1" instance=ExtResource("2_likc6")]
-card_value = 49
-
-[node name="Card3" parent="Stacks/Stack/Cards" index="2" instance=ExtResource("2_likc6")]
-card_value = 34
-
-[node name="Card4" parent="Stacks/Stack/Cards" index="3" instance=ExtResource("2_likc6")]
-card_value = 22
-
-[editable path="Stacks/Stack"]

@@ -14,3 +14,4 @@ stack_size = 5
 shape = SubResource("RectangleShape2D_likc6")
 
 [node name="Cards" type="Node2D" parent="."]
+unique_name_in_owner = true
