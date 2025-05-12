@@ -6,7 +6,7 @@ fqName = card.Card
 relativeSourcePath = game/card/Card.kt
 baseType = Area2D
 supertypes = [
-	godot.api.Area2D,
+    godot.api.Area2D,
 	godot.api.CollisionObject2D,
 	godot.api.Node2D,
 	godot.api.CanvasItem,
@@ -18,12 +18,12 @@ supertypes = [
 	kotlin.Any
 ]
 signals = [
-	
+    
 ]
 properties = [
-	card_value,
+    card_value,
 	sprite2_d
 ]
 functions = [
-	_ready
+    _ready
 ]

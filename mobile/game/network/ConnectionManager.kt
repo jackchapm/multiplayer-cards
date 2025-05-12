@@ -5,12 +5,8 @@ import godot.annotation.RegisterClass
 import godot.annotation.RegisterConstructor
 import godot.annotation.RegisterFunction
 import godot.api.Node
-import godot.api.PackedScene
-import godot.api.ResourceLoader
 import godot.coroutines.awaitMainThread
 import godot.coroutines.godotCoroutine
-import godot.extension.getNodeAs
-import godot.extension.loadAs
 import godot.global.GD
 import io.ktor.client.plugins.websocket.*
 import io.ktor.client.request.*
@@ -20,10 +16,8 @@ import network.model.CauseAction
 import network.model.WebsocketMessage
 import network.model.WebsocketResponse
 import stack.Stack
-import stack.Stack.Companion.instantiate
 
 const val WEBSOCKET_ENDPOINT = "wss://cardsws.jackchap.com"
-const val CARD_RESOURCE = "res://game/card/card.tscn"
 
 @RegisterClass
 class ConnectionManager(private val token: String) : Node() {
@@ -33,15 +27,10 @@ class ConnectionManager(private val token: String) : Node() {
 
     private lateinit var websocket: DefaultClientWebSocketSession
 
-    private lateinit var stackScene: PackedScene
-    private lateinit var cardScene: PackedScene
-
     lateinit var game: Game
 
     @RegisterFunction
     override fun _ready() = godotCoroutine {
-        cardScene = ResourceLoader.loadAs(CARD_RESOURCE)!!
-
         game = getParent() as Game
 
         websocket = HttpClient.client.webSocketSession(WEBSOCKET_ENDPOINT) {
@@ -56,21 +45,10 @@ class ConnectionManager(private val token: String) : Node() {
                     when (frame) {
                         is WebsocketResponse.GameState -> handleGameState(frame)
                         is WebsocketResponse.PlayerState -> handlePlayerState(frame)
-                        is WebsocketResponse.Error -> {
-
-                        }
-
-                        is WebsocketResponse.CloseGame -> {
-
-                        }
-
-                        is WebsocketResponse.Success -> {
-
-                        }
-
-                        is WebsocketResponse.Pong -> {
-
-                        }
+                        is WebsocketResponse.Error -> {}
+                        is WebsocketResponse.CloseGame -> {}
+                        is WebsocketResponse.Success -> {}
+                        is WebsocketResponse.Pong -> {}
                     }
                 }
             } catch (e: Exception) {
@@ -80,19 +58,41 @@ class ConnectionManager(private val token: String) : Node() {
     }
 
     private fun handleGameState(state: WebsocketResponse.GameState) {
-        GD.print(state)
+        GD.print("received frame: ${state.causeAction}")
         when (state.causeAction) {
             CauseAction.Ping -> {
                 game.stacks.getChildren().forEach(Node::queueFree)
             }
+
+            CauseAction.PopCard if (state.causePlayer == "us" || true) -> {
+                val oldStack = state.stacks!![0]
+                val newStack = state.stacks[1]
+                val localStack = getTree()!!.getNodesInGroup("moving").firstOrNull {
+                    it.name.toString() == "moving${oldStack.stackId}"
+                } as Stack?
+                localStack?.apply {
+                    setName(newStack.stackId)
+                    uniqueNameInOwner = true
+                    stackId = newStack.stackId
+                    websocketSendSignal = game.websocketSend
+                }
+            }
+
+            CauseAction.DropStack if (state.causePlayer == "us" || true) -> {
+                // don't remove from moving group until after drop stack frame is received to avoid flickering
+                (getTree()!!.getNodesInGroup("moving")
+                    .firstOrNull { it.name.toString() == state.stacks!![0].stackId } as Stack?)?.removeFromGroup("moving")
+            }
+
             else -> {}
         }
 
-        getTree()!!.getNodesInGroup("local").forEach(Node::queueFree)
-
         // todo add boolean isNew to stack state
-        // todo mutate rather than replace
-        state.stacks?.forEach { state -> game.replaceOrCreate(state) }
+        state.stacks?.forEach(game::replaceOrCreate)
+        getTree()!!.getNodesInGroup("local").forEach {
+            if (it.isInGroup("moving")) return@forEach
+            queueFree()
+        }
     }
 
     private fun handlePlayerState(state: WebsocketResponse.PlayerState) {

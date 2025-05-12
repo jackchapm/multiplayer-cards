@@ -20,9 +20,9 @@ import network.model.CreateGameRequest
 import network.model.DeckType
 import network.model.JoinGameRequest
 import network.model.JoinGameResponse
+import util.TABLE_PATH
 
 // todo move create and join game logic to separate class
-const val TABLE_PATH = "res://game/scene/table_scene.tscn"
 const val CREATE_GAME_ENDPOINT = "/game/create"
 const val JOIN_GAME_ENDPOINT = "/game/join"
 
@@ -45,7 +45,7 @@ class MainMenu : Control() {
 				// todo handle errors here
 				try {
 					val resp = HttpClient.client.post(CREATE_GAME_ENDPOINT) {
-						val r = CreateGameRequest("test game", DeckType.Standard)
+						val r = CreateGameRequest("test game", DeckType.Custom(listOf(listOf(10), listOf(11, 12, 13))))
 						setBody(r)
 					}.body<JoinGameResponse>()
 					populateGameScene(resp)

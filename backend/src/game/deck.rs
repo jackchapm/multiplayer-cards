@@ -1,4 +1,4 @@
-use crate::requests::{DeckType};
+use crate::requests::DeckType;
 use rand::rng;
 use rand::seq::SliceRandom;
 use schemars::JsonSchema;
@@ -119,7 +119,7 @@ impl Card {
     pub fn suit(&self) -> Option<Suit> {
         self.is_numerical().then(|| Suit::from_u8(self.0))
     }
-    
+
     pub fn flip(&mut self) {
         self.0 ^= 0b1000_0000
     }
@@ -138,19 +138,18 @@ impl Display for Card {
 }
 
 pub type StackId = String;
+pub type Position = (i16, i16);
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Stack {
-    // todo uuid for now but can probably be int u8
     pub id: StackId,
     pub cards: Vec<Card>,
-    // todo convert into type
-    pub position: (i16, i16),
+    pub position: Position,
 }
 
 impl Stack {
     pub(super) fn from(deck_type: DeckType) -> Vec<Self> {
-        match deck_type {
+        let stacks = match deck_type {
             DeckType::Standard => {
                 let mut cards: Vec<_> = (4..=55).map(Card::from_u8).collect();
                 // Turn every card face down
@@ -158,34 +157,32 @@ impl Stack {
                     card.0 |= 0b1000_0000;
                 }
                 cards.shuffle(&mut rng());
-
-                vec![Self {
-                    id: Uuid::new_v4().to_string(),
-                    cards,
-                    position: (0, 0),
-                }]
+                vec![cards]
             }
             DeckType::Custom { stacks } => {
                 // todo Check card validity
-                stacks.into_iter().map(|cards| {
-                    Self {
-                        id: Uuid::new_v4().to_string(),
-                        cards,
-                        position: (0, 0),
-                    }
-                }).collect()
+                stacks
             }
-        }
+        };
+
+        stacks
+            .into_iter()
+            .enumerate()
+            .map(|(i, cards)| Self {
+                id: Uuid::new_v4().to_string(),
+                cards,
+                position: (200 + 250 * (i % 3) as i16, 200 + 250 * (i / 3) as i16),
+            })
+            .collect()
     }
 
     pub(super) fn state(&self) -> StackState {
         let top_card = match self.cards.last().cloned() {
             Some(card) if !card.is_face_down() => card,
-            _ => Card::HIDDEN_CARD
+            _ => Card::HIDDEN_CARD,
         };
 
         StackState {
-            //todo do i need to clone here
             stack_id: self.id.clone(),
             position: self.position.clone(),
             visible_card: top_card,
@@ -198,7 +195,7 @@ impl Stack {
 #[serde(rename_all = "camelCase")]
 pub struct StackState {
     pub stack_id: StackId,
-    pub position: (i16, i16),
+    pub position: Position,
     pub visible_card: Card,
     pub remaining_cards: usize,
 }

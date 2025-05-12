@@ -6,7 +6,7 @@ fqName = stack.Stack
 relativeSourcePath = game/stack/Stack.kt
 baseType = Area2D
 supertypes = [
-	godot.api.Area2D,
+    godot.api.Area2D,
 	godot.api.CollisionObject2D,
 	godot.api.Node2D,
 	godot.api.CanvasItem,
@@ -18,14 +18,14 @@ supertypes = [
 	kotlin.Any
 ]
 signals = [
-	
+    
 ]
 properties = [
-	stack_size,
+    stack_size,
 	stack_id
 ]
 functions = [
-	_ready,
+    _ready,
 	on_input,
 	_unhandled_input
 ]

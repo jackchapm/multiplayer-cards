@@ -16,7 +16,7 @@ mod player;
 
 pub use deck::*;
 pub use player::*;
-use crate::requests::WebsocketRequestDiscriminants::{FlipCard, FlipStack, JoinGame, LeaveGame, MoveStack, Ping, PutCard, Reset, Shuffle, TakeCard};
+use crate::requests::WebsocketRequestDiscriminants::{DropStack, FlipCard, FlipStack, JoinGame, LeaveGame, PopCard, MoveStack, Ping, PutCard, Reset, Shuffle, TakeCard};
 
 pub type GameId = String;
 
@@ -27,7 +27,6 @@ pub struct Game {
     pub owner: PlayerId, // todo move to separate game data object
     pub authorized_players: Vec<PlayerId>, // todo move to separate game data object
     pub deck_type: DeckType,
-    // todo This is rarely queried, convert into a vec that stores both (tuple?)
     pub connected_players: HashMap<PlayerId, String>,
     pub stacks: Vec<Stack>,
     #[serde(skip)]
@@ -53,7 +52,7 @@ impl Game {
         let game_id = Uuid::new_v4().to_string();
 
         let stacks = Stack::from(deck_type.clone());
-        
+
         let new_game = Self {
             id: game_id,
             created_at: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs(),
@@ -117,7 +116,7 @@ impl Game {
             return Err(anyhow!("player not in this game"))
         }
         // Keep player state in database incase they join back
-        
+
         if self.connected_players.is_empty() {
             self.destroy(services).await?;
             return Ok(())
@@ -128,7 +127,6 @@ impl Game {
             // can safely call unwrap as we know the list is not empty
             self.owner = self.connected_players.keys().next().unwrap().clone();
         }
-        // todo only send update, not full state
         services.put::<Game>(&self.id, &self).await?;
         self.send_state_all(services, &GameStateData {
             cause_action: Some(LeaveGame),
@@ -184,7 +182,7 @@ impl Game {
         services.put::<Game>(&self.id, self).await.map(|_| ())
     }
 
-    fn stack_at_position(&mut self, position: (i16, i16), create_if_none: bool) -> Option<&mut Stack> {
+    fn stack_at_position(&mut self, position: Position, create_if_none: bool) -> Option<&mut Stack> {
         if let Some(index) = self.stacks.iter().position(|s| s.position == position) {
             return Some(&mut self.stacks[index]);
         }
@@ -255,7 +253,7 @@ impl Game {
         Ok(())
     }
 
-    pub async fn move_stack(&mut self, services: &Services, stack_id: StackId, position: (i16, i16)) -> Result<(), WebsocketError> {
+    pub async fn drop_stack(&mut self, services: &Services, stack_id: StackId, position: Position) -> Result<(), WebsocketError> {
         let stack_index = self.stacks.iter().position(|s| s.id == stack_id)
             .ok_or(WebsocketError::StackNotFound)?;
 
@@ -274,25 +272,44 @@ impl Game {
 
         self.save(services).await?;
         self.send_state_all(services, &GameStateData {
-            cause_action: Some(MoveStack),
-            stacks: Some(iter::once(new_stack_state).chain(old_stack_state.into_iter()).collect()),
+            cause_action: Some(DropStack),
+            stacks: Some(old_stack_state.into_iter().chain(iter::once(new_stack_state)).collect()),
             ..Default::default()
         }.with(&self.id)).await?;
         Ok(())
     }
 
-    pub async fn move_card(&mut self, services: &Services, stack_id: StackId, position: (i16, i16)) -> Result<(), WebsocketError> {
-        let (old_stack_state, new_stack_state) = {
-            let (card, old_stack_state) = self.pop_from_stack(stack_id)?;
-            let target_stack = self.stack_at_position(position, true).unwrap();
-            target_stack.cards.push(card);
-            (target_stack.state(), old_stack_state)
+    // todo stack order is guaranteed in database, so players joining a game in progress will have incorrectly ordered stacks
+    pub async fn pop_card(&mut self, services: &Services, stack_id: StackId) -> Result<(), WebsocketError> {
+        let (card, old_stack_state) = self.pop_from_stack(stack_id)?;
+        let target_stack = Stack {
+            id: Uuid::new_v4().to_string(),
+            cards: vec![card],
+            position: old_stack_state.position,
+        };
+        let new_stack_state = target_stack.state();
+        self.stacks.push(target_stack);
+
+        self.save(services).await?;
+        self.send_state_all(services, &GameStateData {
+            cause_action: Some(PopCard),
+            stacks: Some(vec![old_stack_state, new_stack_state]),
+            ..Default::default()
+        }.with(&self.id)).await?;
+        Ok(())
+    }
+
+    pub async fn move_stack(&mut self, services: &Services, stack_id: StackId, position: Position) -> Result<(), WebsocketError> {
+        let new_stack_state = {
+            let stack = self.get_stack(stack_id)?;
+            stack.position = position;
+            stack.state()
         };
 
         self.save(services).await?;
         self.send_state_all(services, &GameStateData {
             cause_action: Some(MoveStack),
-            stacks: Some(vec![old_stack_state, new_stack_state]),
+            stacks: Some(vec![new_stack_state]),
             ..Default::default()
         }.with(&self.id)).await?;
         Ok(())
@@ -319,7 +336,7 @@ impl Game {
         services: &Services,
         player_id: &PlayerId,
         hand_index: usize,
-        position: (i16, i16),
+        position: Position,
         face_down: bool,
         conn_id: &str
     ) -> Result<(), WebsocketError> {
@@ -358,7 +375,7 @@ impl Game {
                 player.send_state(services, conn_id).await?;
                 services.put::<Player>(&player_id, &player).await?;
             } else {
-                services.delete::<Player>(&player_id, None).await?; 
+                services.delete::<Player>(&player_id, None).await?;
             }
         }
         self.stacks = Stack::from(self.deck_type.clone());

@@ -43,7 +43,6 @@ pub enum WebsocketError {
     InvalidRequest(&'static str),
 
     #[error("Internal server error: {0}")]
-    // todo stack trace should not be sent to client
     ServiceError(String)
 }
 

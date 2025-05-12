@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 use crate::game::GameId;
 
 pub const TOKEN_EXPIRY: u64 = 60 * 60;
-// todo play with this to allow players to keep a game going for multiple days
+// expiry doesn't really matter as players can just POST /game/join again to get a new token
+// only useful for reconnecting if connection drops
 pub const WEBSOCKET_TOKEN_EXPIRY: u64 = 60 * 60 * 24;
 pub const HTTP_AUDIENCE: &'static str = "cards";
 pub const WEBSOCKET_AUDIENCE: &'static str = "websocket";

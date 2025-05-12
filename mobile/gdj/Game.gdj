@@ -6,7 +6,7 @@ fqName = Game
 relativeSourcePath = game/Game.kt
 baseType = Node
 supertypes = [
-	godot.api.Node,
+    godot.api.Node,
 	godot.api.Object,
 	godot.core.KtObject,
 	godot.common.interop.NativeWrapper,
@@ -14,11 +14,11 @@ supertypes = [
 	kotlin.Any
 ]
 signals = [
-	websocket_send
+    websocket_send
 ]
 properties = [
-	
+    
 ]
 functions = [
-	_ready
+    _ready
 ]

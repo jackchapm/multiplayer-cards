@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
 plugins {
     alias(libs.plugins.godotKotlinJvm)
     alias(libs.plugins.kotlin.serialization)
@@ -45,4 +47,9 @@ godot {
     additionalGraalReflectionConfigurationFiles.set(arrayOf(graalDir.resolve("ktor-config.json").absolutePath))
     windowsDeveloperVCVarsPath.set(File("${System.getenv("VC_VARS_PATH")}"))
     isIOSExportEnabled.set(false)
+}
+
+val compileKotlin: KotlinCompile by tasks
+compileKotlin.compilerOptions {
+    freeCompilerArgs.set(listOf("-Xwhen-guards"))
 }

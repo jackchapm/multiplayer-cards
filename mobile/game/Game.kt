@@ -16,7 +16,6 @@ import network.model.GameId
 import network.model.PlayerId
 import network.model.StackState
 import stack.Stack
-import stack.Stack.Companion.instantiate
 
 @RegisterClass
 class Game(val gameId: GameId, val token: String) : Node() {
@@ -48,6 +47,7 @@ class Game(val gameId: GameId, val token: String) : Node() {
 
         websocketSend.connect {
             godotCoroutine {
+                GD.print("sending frame: $it")
                 connectionManager.sendMessageString(it)
             }
         }
@@ -56,10 +56,32 @@ class Game(val gameId: GameId, val token: String) : Node() {
     fun replaceOrCreate(stackState: StackState) {
         val stackPath = stackState.stackId
         if (stacks.hasNode(stackPath)) {
-            stacks.getNodeAs<Stack>(stackPath)?.free()
+            val stack = stacks.getNodeAs<Stack>(stackPath)!!
+            if(stackState.remainingCards == 0) {
+                stack.free()
+                return
+            }
+            val wasLocal = stack.isInGroup("local")
+            if(wasLocal) stack.removeFromGroup("local")
+            if (stack.globalPosition != stackState.position && (!wasLocal || !stack.isInGroup("moving"))) {
+                stack.globalPosition = stackState.position
+                stacks.moveChild(stack, stacks.getChildCount() - 1)
+            }
+            stack.stackSize = stackState.remainingCards
+            stack.changeTopCard(stackState.visibleCard)
+        } else if (stackState.remainingCards > 0) {
+            Stack.instantiate {
+                stackId = stackState.stackId
+                uniqueNameInOwner = true
+                websocketSendSignal = websocketSend
+
+                stackSize = stackState.remainingCards
+                changeTopCard(stackState.visibleCard)
+                globalPosition = stackState.position
+
+                stacks.addChild(this)
+            }
         }
-        if(stackState.remainingCards > 0)
-            stacks.addChild(stackState.instantiate(this))
     }
 
 }

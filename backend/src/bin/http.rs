@@ -61,7 +61,6 @@ async fn refresh_token_handler(
             .await);
     };
 
-    // todo these possibly aren't getting deleted
     let Ok(uuid) = services
         .delete::<RefreshToken>(&token_str.to_string(), None)
         .await

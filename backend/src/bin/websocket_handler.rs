@@ -66,7 +66,6 @@ async fn handle_message(
     game_id: GameId,
     conn_id: &str,
 ) -> Result<(), WebsocketError> {
-    // todo fix possible race conditions when pulling from db
     let Some(mut game) = services.get::<Game>(&game_id).await else {
         services.send(conn_id, &CloseGame).await?;
         services.delete_connection(conn_id).await?;
@@ -74,7 +73,6 @@ async fn handle_message(
     };
 
     // join game -> only player showing in game -> join again, item not in db to delete?
-    // todo refactor
     match message {
         WebsocketRequest::Ping => services.send(conn_id, &WebsocketResponse::Pong).await?,
         WebsocketRequest::JoinGame => {
@@ -105,8 +103,9 @@ async fn handle_message(
             game.move_stack(services, stack, position).await?
         }
         WebsocketRequest::FlipStack { stack } => game.flip_stack(services, stack).await?,
-        WebsocketRequest::MoveCard { stack, position } => {
-            game.move_card(services, stack, position).await?
+        WebsocketRequest::PopCard { stack } => game.pop_card(services, stack).await?,
+        WebsocketRequest::DropStack { stack, position} => {
+            game.drop_stack(services, stack, position).await?;
         }
         WebsocketRequest::Shuffle { stack } => game.shuffle_stack(services, stack).await?,
         WebsocketRequest::Deal { .. } | WebsocketRequest::GivePlayer { .. } => todo!(),

@@ -1,19 +1,31 @@
-use aws_lambda_events::apigw::{ApiGatewayCustomAuthorizerPolicy, ApiGatewayCustomAuthorizerRequestTypeRequest, ApiGatewayCustomAuthorizerResponse};
+use aws_lambda_events::apigw::{
+    ApiGatewayCustomAuthorizerPolicy, ApiGatewayCustomAuthorizerRequestTypeRequest,
+    ApiGatewayCustomAuthorizerResponse,
+};
 use aws_lambda_events::iam::{IamPolicyEffect, IamPolicyStatement};
 use jsonwebtoken::{decode, DecodingKey, Validation};
 use lambda_runtime::{run, service_fn, tracing, Error, LambdaEvent};
-use serde_json::{json};
 use multiplayer_cards::auth::{AuthorizationContext, Claims, HTTP_AUDIENCE, WEBSOCKET_AUDIENCE};
+use serde_json::json;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     tracing::init_default_subscriber();
 
-    run(service_fn(function_handler)).await
+    let secret = std::env::var("JWT_SECRET").expect("jwt secret not set");
+    let websocket_arn = std::env::var("WEBSOCKET_ARN").expect("websocket arn not set");
+    let decoding_key = DecodingKey::from_secret(secret.as_bytes());
+
+    run(service_fn(async |e| {
+        function_handler(e, &decoding_key, &websocket_arn).await
+    }))
+    .await
 }
 
 pub async fn function_handler(
     event: LambdaEvent<ApiGatewayCustomAuthorizerRequestTypeRequest>,
+    decoding_key: &DecodingKey,
+    websocket_arn: &str,
 ) -> Result<ApiGatewayCustomAuthorizerResponse, Error> {
     let auth_header = event
         .payload
@@ -29,18 +41,10 @@ pub async fn function_handler(
         }
         _ => None,
     }) else {
-        return Ok(generate_response(
-            IamPolicyEffect::Deny,
-            method_arn,
-            None,
-        ));
+        return Ok(generate_response(IamPolicyEffect::Deny, method_arn, None));
     };
-    
-    let secret = std::env::var("JWT_SECRET")?;
-    let decoding_key = DecodingKey::from_secret(secret.as_bytes());
 
-    // todo move to services struct?
-    let websocket_arn = std::env::var("WEBSOCKET_ARN").expect("websocket arn not set");
+
     let mut validation = Validation::default();
     if method_arn == websocket_arn {
         validation.set_audience(&[WEBSOCKET_AUDIENCE])
@@ -51,7 +55,13 @@ pub async fn function_handler(
     decode::<Claims>(token, &decoding_key, &validation)
         .map(|t| t.claims)
         .map_or_else(
-            |_| Ok(generate_response(IamPolicyEffect::Deny, method_arn.clone(), None)),
+            |_| {
+                Ok(generate_response(
+                    IamPolicyEffect::Deny,
+                    method_arn.clone(),
+                    None,
+                ))
+            },
             |claims| {
                 Ok(generate_response(
                     IamPolicyEffect::Allow,

@@ -1,7 +1,5 @@
 package network.model
 
-import godot.annotation.RegisterClass
-import godot.api.Object
 import godot.core.Vector2
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -9,50 +7,56 @@ import kotlinx.serialization.Serializable
 @Serializable
 sealed class WebsocketMessage {
     @Serializable
+    sealed class StackMessage : WebsocketMessage() {
+        abstract val stack: StackId
+
+        @Serializable
+        @SerialName("take-card")
+        data class TakeCard(override val stack: StackId) : StackMessage()
+
+        @Serializable
+        @SerialName("flip-card")
+        data class FlipCard(override val stack: StackId) : StackMessage()
+
+        @Serializable
+        @SerialName("flip-stack")
+        data class FlipStack(override val stack: StackId) : StackMessage()
+
+        @Serializable
+        @SerialName("pop-card")
+        data class PopCard(override val stack: StackId) : StackMessage()
+
+        @Serializable
+        @SerialName("move-stack")
+        data class MoveStack(
+            override val stack: StackId, @Serializable(with = Vector2Serializer::class) val position: Vector2
+        ) : StackMessage()
+
+        @Serializable
+        @SerialName("drop-stack")
+        data class DropStack(
+            override val stack: StackId, @Serializable(with = Vector2Serializer::class) val position: Vector2
+        ) : StackMessage()
+
+        @Serializable
+        @SerialName("shuffle")
+        data class Shuffle(override val stack: StackId) : StackMessage()
+
+        @Serializable
+        @SerialName("deal")
+        data class Deal(override val stack: StackId) : StackMessage()
+    }
+
+    @Serializable
     @SerialName("join-game")
     data object JoinGame : WebsocketMessage()
 
     @Serializable
-    @SerialName("take-card")
-    data class TakeCard(val stack: StackId) : WebsocketMessage()
-
-    @Serializable
     @SerialName("put-card")
     data class PutCard(
-        val handIndex: Int,
-        @Serializable(with = Vector2Serializer::class) val position: Vector2,
-        val faceDown: Boolean
+        val handIndex: Int, @Serializable(with = Vector2Serializer::class) val position: Vector2, val faceDown: Boolean
     ) : WebsocketMessage()
 
-    @Serializable
-    @SerialName("flip-card")
-    data class FlipCard(val stack: StackId) : WebsocketMessage()
-
-    @Serializable
-    @SerialName("flip-stack")
-    data class FlipStack(val stack: StackId) : WebsocketMessage()
-
-    @Serializable
-    @SerialName("move-card")
-    data class MoveCard(
-        val stack: StackId,
-        @Serializable(with = Vector2Serializer::class) val position: Vector2
-    ) : WebsocketMessage()
-
-    @Serializable
-    @SerialName("move-stack")
-    data class MoveStack(
-        val stack: StackId,
-        @Serializable(with = Vector2Serializer::class) val position: Vector2
-    ) : WebsocketMessage()
-
-    @Serializable
-    @SerialName("shuffle")
-    data class Shuffle(val stack: StackId) : WebsocketMessage()
-
-    @Serializable
-    @SerialName("deal")
-    data class Deal(val stack: StackId) : WebsocketMessage()
 
     @Serializable
     @SerialName("give-player")

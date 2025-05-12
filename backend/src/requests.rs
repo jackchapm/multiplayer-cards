@@ -1,4 +1,4 @@
-use crate::game::{Card, GameId, PlayerId, StackId, StackState};
+use crate::game::{Card, GameId, PlayerId, Position, StackId, StackState};
 use crate::{Services, WebsocketError};
 use anyhow::Error;
 use aws_sdk_apigatewaymanagement::primitives::Blob;
@@ -18,11 +18,12 @@ use crate::requests::WebsocketResponse::GameState;
 pub enum WebsocketRequest {
     JoinGame,
     TakeCard { stack: StackId },
-    PutCard { hand_index: usize, position: (i16, i16), face_down: bool },
+    PutCard { hand_index: usize, position: Position, face_down: bool },
     FlipCard { stack: StackId },
     FlipStack { stack: StackId },
-    MoveCard { stack: StackId, position: (i16, i16) },
-    MoveStack { stack: StackId, position: (i16, i16) },
+    PopCard { stack: StackId },
+    MoveStack { stack: StackId, position: Position },
+    DropStack { stack: StackId, position: Position },
     Shuffle { stack: StackId },
     Deal { stack: StackId },
     GivePlayer { hand_index: usize, trade_to: PlayerId},
