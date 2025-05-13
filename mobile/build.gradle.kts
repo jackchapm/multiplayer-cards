@@ -9,6 +9,10 @@ repositories {
     mavenCentral()
 }
 
+val debugImplementation by configurations.creating {
+    extendsFrom(configurations.implementation.get())
+}
+
 dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.ktor.client.core)
@@ -17,8 +21,8 @@ dependencies {
     implementation(libs.ktor.client.auth)
     implementation(libs.ktor.client.websockets)
     implementation(libs.ktor.serialization.kotlinx.json)
-//    implementation(libs.ktor.client.logging)
-    implementation(libs.logback.classic)
+//    debugImplementation(libs.ktor.client.logging)
+//    debugImplementation(libs.logback.classic)
 }
 
 kotlin {
@@ -29,6 +33,8 @@ kotlin.sourceSets.main {
     kotlin.srcDirs("game")
 }
 
+val isDebugBuild = project.gradle.startParameter.taskNames.any { it.contains("debugBuild") }
+
 godot {
     // the script registration which you'll attach to nodes are generated into this directory
     registrationFileBaseDir.set(projectDir.resolve("gdj").also { it.mkdirs() })
@@ -36,9 +42,9 @@ godot {
 
     // NOTE: Make sure you read: https://godot-kotl.in/en/stable/user-guide/exporting/#android as not all jvm libraries are compatible with android!
     // TODO consider android 36
-    isAndroidExportEnabled.set(false)
-    d8ToolPath.set(File("${System.getenv("ANDROID_SDK_ROOT")}/build-tools/34.0.0/d8"))
-    androidCompileSdkDir.set(File("${System.getenv("ANDROID_SDK_ROOT")}/platforms/android-34"))
+    androidMinApi.set(30)
+    d8ToolPath.set(File("${System.getenv("ANDROID_SDK")}/build-tools/36.0.0/d8"))
+    androidCompileSdkDir.set(File("${System.getenv("ANDROID_SDK")}/platforms/android-36"))
 
     // NOTE: this is an advanced feature! Read: https://godot-kotl.in/en/stable/user-guide/advanced/graal-vm-native-image/
     // isGraalNativeImageExportEnabled.set(false)
@@ -46,10 +52,18 @@ godot {
     val graalDir = projectDir.resolve("graal")
     additionalGraalReflectionConfigurationFiles.set(arrayOf(graalDir.resolve("ktor-config.json").absolutePath))
     windowsDeveloperVCVarsPath.set(File("${System.getenv("VC_VARS_PATH")}"))
-    isIOSExportEnabled.set(false)
+
+    isIOSExportEnabled.set(!isDebugBuild)
+    isAndroidExportEnabled.set(!isDebugBuild)
 }
 
 val compileKotlin: KotlinCompile by tasks
 compileKotlin.compilerOptions {
     freeCompilerArgs.set(listOf("-Xwhen-guards"))
+}
+
+tasks.register("debugBuild") {
+    group = "build"
+    description = "Build the project targetting jvm for debugging rather than a full native build"
+    dependsOn("build")
 }

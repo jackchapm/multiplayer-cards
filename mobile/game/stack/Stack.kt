@@ -15,8 +15,10 @@ import network.HttpClient
 import network.model.WebsocketMessage
 import util.STACK_RESOURCE
 
-const val DRAG_INACCURACY = 1
+const val DRAG_INACCURACY = 25
 const val STACK_THRESHOLD_SQUARED = 5000
+// should be changed for production
+const val MOVE_MESSAGE_TIME = 1.0
 
 @RegisterClass
 class Stack(
@@ -61,6 +63,8 @@ class Stack(
         panelControl = getNodeAs("Panel")!!
         if (stackId != "local") setName(stackId)
 
+        dragTimer.waitTime = MOVE_MESSAGE_TIME
+
         dragTimer.timeout.connect {
             if (isInGroup("local")) tryEmit(WebsocketMessage.StackMessage.MoveStack(stackId, globalPosition), false)
         }
@@ -104,6 +108,8 @@ class Stack(
         if (!dragging) return
         if (event is InputEventScreenDrag && event.index in indexes) {
             getViewport()?.setInputAsHandled()
+            // android - handle small drag
+            if((event.position - dragDelta).lengthSquared() < DRAG_INACCURACY) return
             if (indexes.size == 1 && stackSize > 1 && !isInGroup("moving")) {
                 val card = cards.popBack()
                 cardParent.removeChild(card)

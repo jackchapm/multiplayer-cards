@@ -2,7 +2,6 @@ package network
 
 import godot.api.FileAccess
 import godot.api.Node
-import godot.api.OS
 import godot.global.GD
 import io.ktor.client.*
 import io.ktor.client.call.*
@@ -16,7 +15,6 @@ import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.*
 import io.ktor.serialization.kotlinx.json.*
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import network.model.AuthResponse
 
@@ -44,7 +42,6 @@ class HttpClient : Node() {
             install(ContentNegotiation) {
                 json(json)
             }
-
 
 //            install(Logging) {
 //                logger = object : Logger {

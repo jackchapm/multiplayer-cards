@@ -7,6 +7,7 @@ import godot.api.BaseButton
 import godot.api.Control
 import godot.api.PackedScene
 import godot.api.ResourceLoader
+import godot.api.TextEdit
 import godot.core.connect
 import godot.coroutines.awaitMainThread
 import godot.coroutines.godotCoroutine
@@ -28,12 +29,14 @@ const val JOIN_GAME_ENDPOINT = "/game/join"
 
 @RegisterClass
 class MainMenu : Control() {
+	lateinit var textNode: TextEdit
 	@RegisterFunction
 	override fun _ready() {
+		textNode = getNodeAs("%TextEdit")!!
 		getNodeAs<BaseButton>("%JoinButton")?.pressed?.connect {
 			godotCoroutine {
 				val resp = HttpClient.client.post(JOIN_GAME_ENDPOINT) {
-					setBody(JoinGameRequest(""))
+					setBody(JoinGameRequest(textNode.text.trim()))
 				}.body<JoinGameResponse>()
 
 				populateGameScene(resp)
@@ -45,7 +48,7 @@ class MainMenu : Control() {
 				// todo handle errors here
 				try {
 					val resp = HttpClient.client.post(CREATE_GAME_ENDPOINT) {
-						val r = CreateGameRequest("test game", DeckType.Custom(listOf(listOf(10), listOf(11, 12, 13))))
+						val r = CreateGameRequest("test game", DeckType.Standard)
 						setBody(r)
 					}.body<JoinGameResponse>()
 					populateGameScene(resp)

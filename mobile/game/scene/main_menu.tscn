@@ -52,3 +52,8 @@ text = "Join game"
 unique_name_in_owner = true
 layout_mode = 2
 text = "Settings"
+
+[node name="TextEdit" type="TextEdit" parent="MarginContainer/MenuButtons/MarginContainer/ButtonContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
